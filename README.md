@@ -9,6 +9,6 @@ Adding a third-party repository (like this one) is easy.  Just add the following
 ```conf
 [basis]
 SigLevel = Optional DatabaseOptional
-Server = https://repository.vasak.net.ar/basis/$arch
+Server = https://repo.vasak.net.ar/basis/$arch
 ```
 
