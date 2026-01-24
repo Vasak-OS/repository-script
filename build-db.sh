@@ -38,7 +38,7 @@ echo -e "${GREEN}Building for architecture 'x86_64'...${NC}"
 ## -s: signs the packages
 ## -n: only add new packages not already in database
 ## -R: remove old package files when updating their entry
-repo-add -s -k D4E45188CD819FD6BBA34C2F25E84F84D2110B5E -n -R basis.db.tar.gz *.pkg.tar.zst
+repo-add -s -k 307E04B769840811099F4077ED5D59DA704DEBE2 -n -R basis.db.tar.gz *.pkg.tar.zst
 
 # Removing the symlinks because GitLab can't handle them.
 rm basis.db
