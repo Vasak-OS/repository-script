@@ -1,7 +1,7 @@
 #!/bin/sh
 #
 # Script name: build-db.sh
-# Description: Script for rebuilding the database for basis.
+# Description: Script for rebuilding the database for vasakos.
 # GitHub: https://github.com/Vasak-OS/repository-script 
 # Forked Of: https://www.gitlab.com/Tomoghno/ts-arch-repo
 # Author: Tomoghno Sen
@@ -30,7 +30,7 @@ echo -e "${GREEN}Building the repo database...${NC}"
 
 ## Arch: x86_64
 cd x86_64
-rm -f basis*
+rm -f vasakos*
 
 echo -e "${GREEN}Building for architecture 'x86_64'...${NC}"
 
@@ -38,15 +38,15 @@ echo -e "${GREEN}Building for architecture 'x86_64'...${NC}"
 ## -s: signs the packages
 ## -n: only add new packages not already in database
 ## -R: remove old package files when updating their entry
-repo-add -s -k 307E04B769840811099F4077ED5D59DA704DEBE2 -n -R basis.db.tar.gz *.pkg.tar.zst
+repo-add -s -k 307E04B769840811099F4077ED5D59DA704DEBE2 -n -R vasakos.db.tar.gz *.pkg.tar.zst
 
 # Removing the symlinks because GitLab can't handle them.
-rm basis.db
-rm basis.files
+rm vasakos.db
+rm vasakos.files
 
 # Renaming the tar.gz files without the extension.
-mv basis.db.tar.gz basis.db
-mv basis.files.tar.gz basis.files
+mv vasakos.db.tar.gz vasakos.db
+mv vasakos.files.tar.gz vasakos.files
 
 echo -e "${GREEN}Packages in the repo have been updated!${NC}"
 
