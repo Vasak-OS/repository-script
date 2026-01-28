@@ -30,7 +30,7 @@ echo -e "${GREEN}Building the repo database...${NC}"
 
 ## Arch: x86_64
 cd x86_64
-rm -f vasakos*
+rm -f vasakos.*
 
 echo -e "${GREEN}Building for architecture 'x86_64'...${NC}"
 
