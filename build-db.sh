@@ -26,13 +26,22 @@ LCYAN='\033[01;36m'
 WHITE='\033[01;37m'
 NC='\033[0m' # No Color
 
+# Configuration Variables
+ARCH="x86_64"
+REPO_NAME="vasakos"
+GPG_KEY="307E04B769840811099F4077ED5D59DA704DEBE2"
+REPO_DB="${REPO_NAME}.db.tar.gz"
+REPO_FILES="${REPO_NAME}.files.tar.gz"
+REPO_DB_FINAL="${REPO_NAME}.db"
+REPO_FILES_FINAL="${REPO_NAME}.files"
+
 echo -e "${GREEN}Building the repo database...${NC}"
 
-## Arch: x86_64
-cd x86_64
-rm -f vasakos.*
+## Arch: architecture selected
+cd "$ARCH"
+rm -f "${REPO_NAME}."*
 
-echo -e "${GREEN}Building for architecture 'x86_64'...${NC}"
+echo -e "${GREEN}Building for architecture '${ARCH}'...${NC}"
 
 ## repo-add
 ## -s: signs the packages
@@ -41,17 +50,17 @@ echo -e "${GREEN}Building for architecture 'x86_64'...${NC}"
 for package in ./*.pkg.tar.zst; do
     if [ -f "$package" ]; then
         echo -e "${CYAN}Adding $package...${NC}"
-        repo-add -s -k 307E04B769840811099F4077ED5D59DA704DEBE2 -n -R vasakos.db.tar.gz "$package"
+        repo-add -s -k "$GPG_KEY" -n -R "$REPO_DB" "$package"
     fi
 done
 
 # Removing the symlinks because GitLab can't handle them.
-rm vasakos.db
-rm vasakos.files
+rm "$REPO_DB_FINAL"
+rm "$REPO_FILES_FINAL"
 
 # Renaming the tar.gz files without the extension.
-mv vasakos.db.tar.gz vasakos.db
-mv vasakos.files.tar.gz vasakos.files
+mv "$REPO_DB" "$REPO_DB_FINAL"
+mv "$REPO_FILES" "$REPO_FILES_FINAL"
 
 echo -e "${GREEN}Packages in the repo have been updated!${NC}"
 
