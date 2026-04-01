@@ -35,6 +35,10 @@ REPO_FILES="${REPO_NAME}.files.tar.gz"
 REPO_DB_FINAL="${REPO_NAME}.db"
 REPO_FILES_FINAL="${REPO_NAME}.files"
 
+# Summary tracking
+PACKAGE_COUNT=0
+PACKAGE_SUMMARY=""
+
 echo -e "${GREEN}Building the repo database...${NC}"
 
 ## Arch: architecture selected
@@ -51,6 +55,14 @@ for package in ./*.pkg.tar.zst; do
     if [ -f "$package" ]; then
         echo -e "${CYAN}Adding $package...${NC}"
         repo-add -s -k "$GPG_KEY" -n -R "$REPO_DB" "$package"
+        
+        # Extract package name and version for summary
+        PACKAGE_BASENAME=$(basename "$package" .pkg.tar.zst)
+        # Remove architecture and release number to get name-version
+        PACKAGE_INFO=$(echo "$PACKAGE_BASENAME" | sed 's/-[^-]*-[^-]*$//')
+        
+        PACKAGE_COUNT=$((PACKAGE_COUNT + 1))
+        PACKAGE_SUMMARY="${PACKAGE_SUMMARY}${PACKAGE_INFO}\n"
     fi
 done
 
@@ -63,4 +75,17 @@ mv "$REPO_DB" "$REPO_DB_FINAL"
 mv "$REPO_FILES" "$REPO_FILES_FINAL"
 
 echo -e "${GREEN}Packages in the repo have been updated!${NC}"
+
+# Display summary table
+echo ""
+echo -e "${LBLUE}═══════════════════════════════════════${NC}"
+echo -e "${LBLUE}Repository Summary${NC}"
+echo -e "${LBLUE}═══════════════════════════════════════${NC}"
+echo -e "${YELLOW}Total packages added: ${PACKAGE_COUNT}${NC}"
+echo ""
+echo -e "${CYAN}Package List:${NC}"
+echo -e "${LBLUE}───────────────────────────────────────${NC}"
+echo -e "$PACKAGE_SUMMARY" | nl -w2 -s'. '
+echo -e "${LBLUE}═══════════════════════════════════════${NC}"
+echo ""
 
