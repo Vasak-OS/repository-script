@@ -38,7 +38,12 @@ echo -e "${GREEN}Building for architecture 'x86_64'...${NC}"
 ## -s: signs the packages
 ## -n: only add new packages not already in database
 ## -R: remove old package files when updating their entry
-repo-add -s -k 307E04B769840811099F4077ED5D59DA704DEBE2 -n -R vasakos.db.tar.gz *.pkg.tar.zst
+for package in ./*.pkg.tar.zst; do
+    if [ -f "$package" ]; then
+        echo -e "${CYAN}Adding $package...${NC}"
+        repo-add -s -k 307E04B769840811099F4077ED5D59DA704DEBE2 -n -R vasakos.db.tar.gz "$package"
+    fi
+done
 
 # Removing the symlinks because GitLab can't handle them.
 rm vasakos.db
