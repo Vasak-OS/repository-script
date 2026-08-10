@@ -119,12 +119,12 @@ names at the end.
 
 Along the way it writes **`x86_64/vasakos.json`**, an index of what is published:
 one entry per package with its name, version, architecture, description, upstream
-URL, build date and size, read from each package's `.PKGINFO`.
+URL, build date and size, read from each package's `.PKGINFO`. It is about 5 KB,
+1.3 KB gzipped.
 
-pacman does not use it. The website does: [os.vasak.net.ar/state/](https://os.vasak.net.ar/state/)
-fetches it while building and takes the version of every component from there, so
-the page cannot drift out of date on its own. Upload it together with the rest of
-the directory.
+pacman does not use it. The website does — see
+[Serving the index to the website](#serving-the-index-to-the-website) below.
+Upload it together with the rest of the directory.
 
 **3. Upload.** Still manual:
 
@@ -152,6 +152,55 @@ local staging directory instead:
 SigLevel = Optional TrustAll
 Server = file:///home/<user>/VasakOS/repository-script/x86_64
 ```
+
+---
+
+## Serving the index to the website
+
+[os.vasak.net.ar/state/](https://os.vasak.net.ar/state/) lists every component with the
+version that is published here. It reads `vasakos.json` **from the visitor's browser**, on
+every page load, so publishing a package is enough to update the page — the site does not
+have to be rebuilt or redeployed.
+
+For that to work the repository host has to allow the site's origin to read the file:
+
+```nginx
+# nginx
+location = /repo/x86_64/vasakos/vasakos.json {
+    add_header Access-Control-Allow-Origin "https://os.vasak.net.ar" always;
+    add_header Cache-Control "public, max-age=300" always;
+}
+```
+
+```apache
+# Apache
+<Files "vasakos.json">
+    Header set Access-Control-Allow-Origin "https://os.vasak.net.ar"
+    Header set Cache-Control "public, max-age=300"
+</Files>
+```
+
+```caddy
+# Caddy
+@repoindex path /repo/x86_64/vasakos/vasakos.json
+header @repoindex {
+    Access-Control-Allow-Origin "https://os.vasak.net.ar"
+    Cache-Control "public, max-age=300"
+}
+```
+
+Only that one file needs the header — the packages and the database are fetched by pacman,
+which does not care about CORS.
+
+To check it from a machine:
+
+```bash
+curl -sI -H 'Origin: https://os.vasak.net.ar' \
+  https://repo.vasak.net.ar/repo/x86_64/vasakos/vasakos.json | grep -i access-control
+```
+
+If the header is missing the site still works: it falls back to the versions baked in at
+build time and says so on the page, instead of showing stale numbers as if they were live.
 
 ---
 
