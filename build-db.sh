@@ -15,6 +15,11 @@
 # symlink. GitLab and most static hosts do not serve symlinks, so the tarballs
 # are renamed to the plain names at the end, signatures included.
 #
+# It also writes a `$repo.json` next to the database listing what is published.
+# pacman ignores it; the website reads it at build time so os.vasak.net.ar/state/
+# shows the version that is really in the repository instead of one somebody
+# remembered to edit by hand.
+#
 # Usage:
 #   ./build-db.sh [options]
 #
@@ -91,7 +96,22 @@ rm -f "${REPO_NAME}."*
 ADD_ARGS=(-n -R)
 [[ $SIGN -eq 1 ]] && ADD_ARGS=(-s -k "$GPG_KEY" "${ADD_ARGS[@]}")
 
+# A JSON index of what is published, written next to the database. pacman does
+# not need it — the website does: os.vasak.net.ar/state/ reads it at build time
+# so the version of every component comes from what is actually in the
+# repository instead of from a number somebody remembered to edit by hand.
+json_escape() {
+  printf '%s' "$1" | sed -e 's/\\/\\\\/g' -e 's/"/\\"/g' -e 's/\t/\\t/g'
+}
+
+# .PKGINFO holds what makepkg recorded at build time, which beats parsing the
+# file name: a pkgname can contain dashes and the description cannot be guessed.
+pkginfo_field() {
+  bsdtar -xOqf "$1" .PKGINFO 2>/dev/null | sed -n "s/^$2 = //p" | head -1
+}
+
 SUMMARY=()
+JSON_ENTRIES=()
 for package in "${PACKAGES[@]}"; do
   echo "${CYAN}Adding ${package}…${NC}"
   repo-add "${ADD_ARGS[@]}" "$REPO_DB" "$package"
@@ -105,7 +125,26 @@ for package in "${PACKAGES[@]}"; do
   name="${rest%-*}"
   size="$(du -h "$package" | cut -f1)"
   SUMMARY+=("$(printf '%-32s %-18s %-8s %s' "$name" "${pkgver}-${pkgrel}" "$arch_field" "$size")")
+
+  info_name="$(pkginfo_field "$package" pkgname)"
+  JSON_ENTRIES+=("$(printf '    {"name":"%s","version":"%s","arch":"%s","desc":"%s","url":"%s","builddate":%s,"csize":%s,"filename":"%s"}' \
+    "$(json_escape "${info_name:-$name}")" \
+    "$(json_escape "${pkgver}-${pkgrel}")" \
+    "$(json_escape "$arch_field")" \
+    "$(json_escape "$(pkginfo_field "$package" pkgdesc)")" \
+    "$(json_escape "$(pkginfo_field "$package" url)")" \
+    "$(pkginfo_field "$package" builddate | grep -E '^[0-9]+$' || echo 0)" \
+    "$(stat -c %s "$package")" \
+    "$(json_escape "$package")")")
 done
+
+{
+  printf '{\n  "repo": "%s",\n  "arch": "%s",\n  "generated": "%s",\n  "count": %d,\n  "packages": [\n' \
+    "$REPO_NAME" "$ARCH" "$(date -u +%Y-%m-%dT%H:%M:%SZ)" "${#PACKAGES[@]}"
+  printf '%s' "${JSON_ENTRIES[0]}"
+  for entry in "${JSON_ENTRIES[@]:1}"; do printf ',\n%s' "$entry"; done
+  printf '\n  ]\n}\n'
+} > "${REPO_NAME}.json"
 
 # repo-add leaves symlinks (vasakos.db -> vasakos.db.tar.gz); replace them with
 # the real files under the names pacman asks for.
@@ -140,4 +179,5 @@ else
 fi
 echo "${LBLUE}═══════════════════════════════════════════════════════════════════${NC}"
 echo
+echo "${DIM}Índice para la web: ${REPO_NAME}.json (${#PACKAGES[@]} paquetes)${NC}"
 echo "${DIM}Upload x86_64/ to https://repo.vasak.net.ar/repo/x86_64/${REPO_NAME}/ — see README.md.${NC}"

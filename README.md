@@ -117,6 +117,15 @@ a symlink, and most static hosts do not serve symlinks. The script renames the
 tarballs — signatures included — to the plain `vasakos.db` / `vasakos.files`
 names at the end.
 
+Along the way it writes **`x86_64/vasakos.json`**, an index of what is published:
+one entry per package with its name, version, architecture, description, upstream
+URL, build date and size, read from each package's `.PKGINFO`.
+
+pacman does not use it. The website does: [os.vasak.net.ar/state/](https://os.vasak.net.ar/state/)
+fetches it while building and takes the version of every component from there, so
+the page cannot drift out of date on its own. Upload it together with the rest of
+the directory.
+
 **3. Upload.** Still manual:
 
 ```bash
