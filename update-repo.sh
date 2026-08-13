@@ -46,6 +46,7 @@ usage() { awk 'NR>1 && /^#/ { sub(/^# ?/, ""); print; next } NR>1 { exit }' "${B
 
 DO_BUILD=1
 DO_DB=1
+BUILD_STATUS=0
 DRY_RUN=0
 DB_ARGS=()
 BUILD_ARGS=()
@@ -68,7 +69,11 @@ if [[ $DO_BUILD -eq 1 ]]; then
     exit 1
   }
   echo "${LBLUE}══ 1/2 · Building out-of-date packages ═══════════════════════════${NC}"
-  "$BUILD_ALL" --repo "$SCRIPT_DIR/x86_64" "${BUILD_ARGS[@]+"${BUILD_ARGS[@]}"}"
+  # A partial build is not a reason to stop: build-all.sh exits non-zero when it
+  # skipped or failed anything, and the packages that *did* build still have to
+  # reach the database. The status is kept and returned at the end so nothing
+  # automated mistakes this for a clean run.
+  "$BUILD_ALL" --repo "$SCRIPT_DIR/x86_64" "${BUILD_ARGS[@]+"${BUILD_ARGS[@]}"}" || BUILD_STATUS=$?
   echo
 fi
 
@@ -83,3 +88,11 @@ if [[ $DRY_RUN -eq 0 && $DO_DB -eq 1 ]]; then
   echo "${DIM}  rsync -avz --delete $SCRIPT_DIR/x86_64/ <host>:/srv/repo/repo/x86_64/vasakos/${NC}"
   echo "${DIM}  sudo mkarchiso -v -w /tmp/archiso-work -o ~/isos $WORKSPACE/archiso${NC}"
 fi
+
+if [[ $BUILD_STATUS -ne 0 ]]; then
+  echo
+  echo "${RED}Ojo:${NC} algún paquete quedó afuera —mirá el resumen de arriba—."
+  echo "El repositorio es coherente, pero no tiene todo lo que esperabas."
+fi
+
+exit $BUILD_STATUS
