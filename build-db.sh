@@ -114,6 +114,26 @@ SUMMARY=()
 JSON_ENTRIES=()
 for package in "${PACKAGES[@]}"; do
   echo "${CYAN}Adding ${package}…${NC}"
+
+  # Sign the package itself, before adding it.
+  #
+  # `repo-add -s` signs the *database*, and only that. pacman's default is
+  # `SigLevel = Required DatabaseOptional`: the signatures it insists on are the
+  # packages', so a repository with a signed database and unsigned packages
+  # fails to install with «invalid or corrupted package». That was the state
+  # this script produced until it was actually tried.
+  #
+  # Before repo-add and not after, because repo-add copies the signature into
+  # the database entry when it finds one. Signed afterwards, pacman would have
+  # to fetch every .sig separately — and older pacman would not look at all.
+  if [[ $SIGN -eq 1 ]]; then
+    rm -f "$package.sig"
+    if ! gpg --detach-sign --no-armor --local-user "$GPG_KEY" "$package"; then
+      echo "${RED}No se pudo firmar $package${NC}" >&2
+      exit 1
+    fi
+  fi
+
   repo-add "${ADD_ARGS[@]}" "$REPO_DB" "$package"
 
   base="${package%.pkg.tar.*}"
@@ -159,9 +179,10 @@ for pair in "$REPO_DB:$REPO_DB_FINAL" "$REPO_FILES:$REPO_FILES_FINAL"; do
   [[ -f "$src.sig" ]] && mv -f "$src.sig" "$dst.sig"
 done
 
-# repo-add keeps a .old copy of every database it replaces. Useful while it is
-# working, noise once it is done — and it would otherwise be uploaded.
-rm -f ./*.old
+# repo-add keeps a .old copy of every database it replaces, and signs that too.
+# Useful while it is working, noise once it is done — and both would otherwise be
+# uploaded.
+rm -f ./*.old ./*.old.sig
 
 echo
 echo "${LBLUE}═══════════════════════════════════════════════════════════════════${NC}"

@@ -107,24 +107,39 @@ version of each package.
 Bumping a `pkgver` or `pkgrel` in PKGBUILDS is therefore the only thing needed
 to queue a package for the next release.
 
-**2. Rebuild and sign the database.** `build-db.sh` then wipes `vasakos.db*`
-and re-adds every package on disk. Building from zero on each run is what makes
-a *deleted* package actually disappear from the database instead of lingering as
-a dangling entry.
+**2. Sign everything and rebuild the database.** `build-db.sh` signs each package,
+then wipes `vasakos.db*` and re-adds every package on disk. Building the database
+from zero on each run is what makes a *deleted* package actually disappear
+instead of lingering as a dangling entry.
 
-pacman resolves `Server/$repo.db`, but `repo-add` writes `$repo.db.tar.gz` plus
-a symlink, and most static hosts do not serve symlinks. The script renames the
+Both signatures matter. pacman's default is `SigLevel = Required
+DatabaseOptional`: the ones it *insists* on are the packages', not the
+database's. A repository with a signed database and unsigned packages fails at
+install time with «invalid or corrupted package» — a confusing way to find out.
+
+`repo-add` in pacman 7 no longer embeds the signature in the database entry, so
+pacman fetches `<package>.sig` from the server. **The upload has to include the
+`.sig` files**; an rsync filter that skips them produces a repository nothing can
+install.
+
+pacman resolves `Server/$repo.db`, but `repo-add` writes `$repo.db.tar.gz` plus a
+symlink, and most static hosts do not serve symlinks. The script renames the
 tarballs — signatures included — to the plain `vasakos.db` / `vasakos.files`
 names at the end.
 
 Along the way it writes **`x86_64/vasakos.json`**, an index of what is published:
 one entry per package with its name, version, architecture, description, upstream
 URL, build date and size, read from each package's `.PKGINFO`. It is about 5 KB,
-1.3 KB gzipped.
-
-pacman does not use it. The website does — see
+1.3 KB gzipped. pacman does not use it; the website does — see
 [Serving the index to the website](#serving-the-index-to-the-website) below.
 Upload it together with the rest of the directory.
+
+**Before signing, the packages are checked.** `update-repo.sh` runs
+`PKGBUILDS/check-portability.sh` between building and signing, and refuses to
+sign if anything fails. A package compiled for the builder's CPU installs
+anywhere and then dies with «illegal instruction» on older hardware; signing it
+first would put a trusted signature on something broken. `--no-portability-check`
+skips it.
 
 **3. Upload.** Still manual:
 

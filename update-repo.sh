@@ -47,6 +47,7 @@ usage() { awk 'NR>1 && /^#/ { sub(/^# ?/, ""); print; next } NR>1 { exit }' "${B
 DO_BUILD=1
 DO_DB=1
 BUILD_STATUS=0
+CHECK_PORTABILITY=1
 DRY_RUN=0
 DB_ARGS=()
 BUILD_ARGS=()
@@ -56,6 +57,7 @@ while [[ $# -gt 0 ]]; do
     --db-only) DO_BUILD=0; shift ;;
     --build-only) DO_DB=0; shift ;;
     --no-sign) DB_ARGS+=(--no-sign); shift ;;
+    --no-portability-check) CHECK_PORTABILITY=0; shift ;;
     -n|--dry-run) DRY_RUN=1; BUILD_ARGS+=(--dry-run); DO_DB=0; shift ;;
     -h|--help) usage 0 ;;
     *) BUILD_ARGS+=("$1"); shift ;;
@@ -68,7 +70,7 @@ if [[ $DO_BUILD -eq 1 ]]; then
     echo "This script expects the PKGBUILDS repo to be checked out next to this one." >&2
     exit 1
   }
-  echo "${LBLUE}══ 1/2 · Building out-of-date packages ═══════════════════════════${NC}"
+  echo "${LBLUE}══ 1/3 · Building out-of-date packages ═══════════════════════════${NC}"
   # A partial build is not a reason to stop: build-all.sh exits non-zero when it
   # skipped or failed anything, and the packages that *did* build still have to
   # reach the database. The status is kept and returned at the end so nothing
@@ -77,8 +79,23 @@ if [[ $DO_BUILD -eq 1 ]]; then
   echo
 fi
 
+# Between building and signing, on purpose: signing a package that only runs on
+# this machine puts a trusted signature on something broken, and once it is
+# uploaded the only fix is another release. A package compiled for the builder's
+# CPU installs anywhere and dies with «illegal instruction» on older hardware —
+# nothing about it looks like a failure until it reaches somebody else.
+if [[ $DO_DB -eq 1 && $CHECK_PORTABILITY -eq 1 && -x "$WORKSPACE/PKGBUILDS/check-portability.sh" ]]; then
+  echo "${LBLUE}══ 2/3 · Checking the packages run on any x86-64 ══════════════════${NC}"
+  if ! "$WORKSPACE/PKGBUILDS/check-portability.sh" "$SCRIPT_DIR/x86_64"; then
+    echo
+    echo "${RED}No se firma nada.${NC} Arreglá los paquetes de arriba y volvé a correr." >&2
+    exit 1
+  fi
+  echo
+fi
+
 if [[ $DO_DB -eq 1 ]]; then
-  echo "${LBLUE}══ 2/2 · Rebuilding the database ═════════════════════════════════${NC}"
+  echo "${LBLUE}══ 3/3 · Rebuilding the database ═════════════════════════════════${NC}"
   "$SCRIPT_DIR/build-db.sh" "${DB_ARGS[@]+"${DB_ARGS[@]}"}"
 fi
 
