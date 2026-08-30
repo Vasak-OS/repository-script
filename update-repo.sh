@@ -103,7 +103,13 @@ if [[ $DRY_RUN -eq 0 && $DO_DB -eq 1 ]]; then
   echo
   echo "${GREEN}Repository ready.${NC} Upload x86_64/ and then rebuild the ISO:"
   echo "${DIM}  rsync -avz --delete $SCRIPT_DIR/x86_64/ <host>:/srv/repo/repo/x86_64/vasakos/${NC}"
-  echo "${DIM}  sudo mkarchiso -v -w /tmp/archiso-work -o ~/isos $WORKSPACE/archiso${NC}"
+  # El directorio de trabajo va en $HOME, no en /tmp. En muchas instalaciones
+  # —ésta incluida— /tmp es un tmpfs, o sea RAM: mkarchiso descomprime ahí un
+  # árbol de 6-8 GB y después escribe el squashfs al lado, así que se queda sin
+  # espacio a mitad de la compresión y, mientras tanto, eso ocupa memoria de
+  # verdad. El pico ronda los 15 GB.
+  echo "${DIM}  sudo mkarchiso -v -w ~/archiso-work -o ~/isos $WORKSPACE/archiso${NC}"
+  echo "${DIM}  (el -w en \$HOME a propósito: si /tmp es tmpfs, ahí no entra)${NC}"
 fi
 
 if [[ $BUILD_STATUS -ne 0 ]]; then
