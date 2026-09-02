@@ -156,25 +156,27 @@ server would otherwise reference files that are still being served.
 pulls from `[vasakos]`, so the ISO picks up whatever was just uploaded:
 
 ```bash
-sudo mkarchiso -v -w ~/archiso-work -o ~/isos ../archiso
+cd ../archiso && sudo ./construir.sh
 ```
 
-The work directory goes in `$HOME` and not in `/tmp`: on many installations
-—this one included— `/tmp` is a tmpfs, so mkarchiso would unpack a 6-8 GB tree
-into RAM and then write the squashfs beside it. The peak is around 15 GB.
+That wrapper is thin on purpose — it does not change how the image is built. It
+exists because building by hand went wrong twice, in two ways it can prevent:
 
-> **If a build was interrupted, unmount before deleting the work directory.**
-> mkarchiso mounts the host's `/sys` inside the tree, and efivarfs hangs below
-> it read-write: an `rm -rf` on the work directory reaches the machine's UEFI
-> variables, boot entries included. The read-only `/sys` stops the `rm` with
-> hundreds of «Read-only file system» lines, but that is the warning, not the
-> protection.
->
-> ```bash
-> grep archiso-work /proc/mounts   # must print nothing
-> sudo umount -R ~/archiso-work/x86_64/airootfs
-> sudo rm -rf ~/archiso-work
-> ```
+- **It never passes `-r`.** `mkarchiso -r` removes the working directory at the
+  end, and on the way it runs `rm -rf` over `airootfs`. The host's `/sys` is
+  mounted in there, with `efivarfs` below it read-write: that `rm` does not
+  reach the image, it reaches the machine's UEFI variables, boot entries
+  included. It happened — the image was built and the final cleanup printed
+  hundreds of «cannot remove ... Read-only file system». The read-only `/sys` is
+  what stopped the `rm`, but that is luck, not a design: what hangs below it is
+  writable. The wrapper deletes the tree afterwards, and only once it has
+  verified nothing is still mounted.
+- **It refuses to start on a tree with leftover mounts**, which is how an
+  interrupted build turns into the case above, and says what to unmount.
+
+The working directory goes in `$HOME` and not in `/tmp`: on many installations
+—this one included— `/tmp` is a tmpfs, so mkarchiso would unpack a 6-8 GB tree
+into RAM and write the squashfs beside it. The peak is around 15 GB.
 
 To test an ISO *before* uploading, point the profile's `pacman.conf` at the
 local staging directory instead:
