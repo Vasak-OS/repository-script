@@ -156,8 +156,25 @@ server would otherwise reference files that are still being served.
 pulls from `[vasakos]`, so the ISO picks up whatever was just uploaded:
 
 ```bash
-sudo mkarchiso -v -w /tmp/archiso-work -o ~/isos ../archiso
+sudo mkarchiso -v -w ~/archiso-work -o ~/isos ../archiso
 ```
+
+The work directory goes in `$HOME` and not in `/tmp`: on many installations
+—this one included— `/tmp` is a tmpfs, so mkarchiso would unpack a 6-8 GB tree
+into RAM and then write the squashfs beside it. The peak is around 15 GB.
+
+> **If a build was interrupted, unmount before deleting the work directory.**
+> mkarchiso mounts the host's `/sys` inside the tree, and efivarfs hangs below
+> it read-write: an `rm -rf` on the work directory reaches the machine's UEFI
+> variables, boot entries included. The read-only `/sys` stops the `rm` with
+> hundreds of «Read-only file system» lines, but that is the warning, not the
+> protection.
+>
+> ```bash
+> grep archiso-work /proc/mounts   # must print nothing
+> sudo umount -R ~/archiso-work/x86_64/airootfs
+> sudo rm -rf ~/archiso-work
+> ```
 
 To test an ISO *before* uploading, point the profile's `pacman.conf` at the
 local staging directory instead:

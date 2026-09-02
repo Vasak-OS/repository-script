@@ -110,6 +110,15 @@ if [[ $DRY_RUN -eq 0 && $DO_DB -eq 1 ]]; then
   # verdad. El pico ronda los 15 GB.
   echo "${DIM}  sudo mkarchiso -v -w ~/archiso-work -o ~/isos $WORKSPACE/archiso${NC}"
   echo "${DIM}  (el -w en \$HOME a propósito: si /tmp es tmpfs, ahí no entra)${NC}"
+  # Y si una construcción quedó a mitad de camino, **desmontar antes de borrar**.
+  # mkarchiso monta el /sys del sistema anfitrión dentro del árbol de trabajo, y
+  # ahí abajo cuelga efivarfs, que es rw: un `rm -rf` sobre el directorio de
+  # trabajo con eso montado le entra a las variables UEFI de la placa —las
+  # entradas de arranque incluidas—. El /sys es de sólo lectura y frena el rm con
+  # cientos de «Read-only file system», pero eso es la señal, no la protección.
+  echo "${DIM}  # si quedó una construcción a medias, desmontar ANTES de borrar:${NC}"
+  echo "${DIM}  grep archiso-work /proc/mounts   # tiene que no devolver nada${NC}"
+  echo "${DIM}  sudo umount -R ~/archiso-work/x86_64/airootfs && sudo rm -rf ~/archiso-work${NC}"
 fi
 
 if [[ $BUILD_STATUS -ne 0 ]]; then
