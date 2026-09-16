@@ -106,14 +106,23 @@ json_escape() {
 
 # .PKGINFO holds what makepkg recorded at build time, which beats parsing the
 # file name: a pkgname can contain dashes and the description cannot be guessed.
-pkginfo_field() {
-  bsdtar -xOqf "$1" .PKGINFO 2>/dev/null | sed -n "s/^$2 = //p" | head -1
+#
+# Se lee **una vez por paquete** y se consulta sobre el texto ya leído. Antes
+# había una función que descomprimía el paquete entero cada vez que se le pedía
+# un campo, y se le pedían cuatro: medido sobre un paquete cualquiera, 115 ms
+# contra los 15 que cuesta extraerlo una sola vez.
+pkginfo_de() {
+  bsdtar -xOqf "$1" .PKGINFO 2>/dev/null
+}
+
+campo_de() {
+  sed -n "s/^$2 = //p" <<<"$1" | head -1
 }
 
 SUMMARY=()
 JSON_ENTRIES=()
 for package in "${PACKAGES[@]}"; do
-  echo "${CYAN}Adding ${package}…${NC}"
+  echo "${CYAN}Preparing ${package}…${NC}"
 
   # Sign the package itself, before adding it.
   #
@@ -134,8 +143,6 @@ for package in "${PACKAGES[@]}"; do
     fi
   fi
 
-  repo-add "${ADD_ARGS[@]}" "$REPO_DB" "$package"
-
   base="${package%.pkg.tar.*}"
   arch_field="${base##*-}"
   rest="${base%-*}"                    # name-pkgver-pkgrel
@@ -146,17 +153,28 @@ for package in "${PACKAGES[@]}"; do
   size="$(du -h "$package" | cut -f1)"
   SUMMARY+=("$(printf '%-32s %-18s %-8s %s' "$name" "${pkgver}-${pkgrel}" "$arch_field" "$size")")
 
-  info_name="$(pkginfo_field "$package" pkgname)"
+  info="$(pkginfo_de "$package")"
+  info_name="$(campo_de "$info" pkgname)"
   JSON_ENTRIES+=("$(printf '    {"name":"%s","version":"%s","arch":"%s","desc":"%s","url":"%s","builddate":%s,"csize":%s,"filename":"%s"}' \
     "$(json_escape "${info_name:-$name}")" \
     "$(json_escape "${pkgver}-${pkgrel}")" \
     "$(json_escape "$arch_field")" \
-    "$(json_escape "$(pkginfo_field "$package" pkgdesc)")" \
-    "$(json_escape "$(pkginfo_field "$package" url)")" \
-    "$(pkginfo_field "$package" builddate | grep -E '^[0-9]+$' || echo 0)" \
+    "$(json_escape "$(campo_de "$info" pkgdesc)")" \
+    "$(json_escape "$(campo_de "$info" url)")" \
+    "$(campo_de "$info" builddate | grep -E '^[0-9]+$' || echo 0)" \
     "$(stat -c %s "$package")" \
     "$(json_escape "$package")")")
 done
+
+# `repo-add` una sola vez con todos los paquetes, no uno por vuelta.
+#
+# Cada invocación descomprime la base entera, la modifica, la vuelve a comprimir
+# y —con `-s`— la vuelve a firmar. Con treinta y cuatro paquetes eso eran
+# treinta y cuatro reescrituras completas de la base para llegar al mismo
+# resultado que una. `repo-add` acepta todos los paquetes de una vez y es la
+# forma en que está pensado para usarse.
+echo "${CYAN}Adding ${#PACKAGES[@]} package(s) to the database…${NC}"
+repo-add "${ADD_ARGS[@]}" "$REPO_DB" "${PACKAGES[@]}"
 
 {
   printf '{\n  "repo": "%s",\n  "arch": "%s",\n  "generated": "%s",\n  "count": %d,\n  "packages": [\n' \
