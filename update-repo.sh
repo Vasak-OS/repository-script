@@ -24,6 +24,10 @@
 #       --build-only    Build and publish, but don't touch the database.
 #       --no-sign       Build the database without signing it.
 #       --no-check      Skip the check-all.sh pre-flight.
+#       --no-portability-check
+#                       Skip the check that the packages run on any x86-64.
+#                       Rarely needed: the verdict is remembered per package, so
+#                       a run where nothing was rebuilt costs half a second.
 #       --refresh-vcs   Refresh pkgver() versions from upstream first.
 #   -h, --help          Show this help.
 #
@@ -86,6 +90,10 @@ fi
 # nothing about it looks like a failure until it reaches somebody else.
 if [[ $DO_DB -eq 1 && $CHECK_PORTABILITY -eq 1 && -x "$WORKSPACE/PKGBUILDS/check-portability.sh" ]]; then
   echo "${LBLUE}══ 2/3 · Checking the packages run on any x86-64 ══════════════════${NC}"
+  # Sólo se revisa lo que cambió: el veredicto se guarda por paquete, contra el
+  # hash de sus bytes y el del script que lo produjo. Con todo ya revisado esto
+  # tarda medio segundo; con un paquete nuevo, unos pocos. Si alguna vez hiciera
+  # falta saltearlo, está --no-portability-check.
   if ! "$WORKSPACE/PKGBUILDS/check-portability.sh" "$SCRIPT_DIR/x86_64"; then
     echo
     echo "${RED}No se firma nada.${NC} Arreglá los paquetes de arriba y volvé a correr." >&2
