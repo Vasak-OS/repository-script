@@ -28,7 +28,11 @@
 #                       Skip the check that the packages run on any x86-64.
 #                       Rarely needed: the verdict is remembered per package, so
 #                       a run where nothing was rebuilt costs half a second.
-#       --refresh-vcs   Refresh pkgver() versions from upstream first.
+#       --no-refresh-vcs
+#                       Skip refreshing pkgver() versions from upstream. They
+#                       are refreshed by default, so a -git package never stays
+#                       behind when upstream moves; pass this when you know it
+#                       has not, to save a source fetch per recipe.
 #   -h, --help          Show this help.
 #
 # Anything else is passed through to build-all.sh, so naming a package
