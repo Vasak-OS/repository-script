@@ -58,6 +58,7 @@ Joaquin (Pato) Decima (VasakOS Repository Key) <jdecima@vasak.net.ar>
 repository-script/
 ├── build-db.sh      # signs every package in x86_64/ and rebuilds the database
 ├── update-repo.sh   # build out-of-date packages + rebuild the database
+├── stats/           # cuenta instalaciones desde los logs del servidor
 └── x86_64/          # staging area: the repository itself (git-ignored)
 ```
 
@@ -235,6 +236,156 @@ curl -sI -H 'Origin: https://os.vasak.net.ar' \
 
 If the header is missing the site still works: it falls back to the versions baked in at
 build time and says so on the page, instead of showing stale numbers as if they were live.
+
+---
+
+## Contar instalaciones
+
+`stats/count-users.py` cuenta cuántas máquinas distintas piden el repositorio y
+deja el número en un JSON que la web puede leer. Cuenta **IPs únicas que piden
+`vasakos.db` con el cliente de pacman**, en una ventana de 90 días.
+
+No es un censo de usuarios: es un **piso**.
+
+- Una IP puede ser un edificio entero o un CGNAT con veinte máquinas detrás, así
+  que subcuenta.
+- Una máquina que no actualiza en 90 días no aparece, así que también subcuenta.
+- Una IP dinámica que cambia todos los días cuenta varias veces, así que
+  sobrecuenta.
+- Los runners de CI y los mirrors quedan afuera por el agente (`pacman/`), salvo
+  que alguien corra pacman de verdad contra el repositorio desde uno.
+
+Por eso se publica como «IPs únicas», nunca como «usuarios». Si el número crece
+o baja, es una tendencia; el valor absoluto no es una verdad.
+
+Se cuenta `vasakos.db` y no el `InRelease`: el `InRelease` es del repositorio
+Debian, que son las aplicaciones sueltas instaladas sobre Debian o Ubuntu, no
+instalaciones de VasakOS. Y no se cuenta `vasakos.files`: pacman sólo lo baja
+con `-Fy`, que casi nadie usa.
+
+El JSON lleva sólo números —ninguna IP, ni hasheada—, y se recalcula entero
+desde los logs en cada corrida: el script no guarda estado ni necesita base de
+datos. Lo único que se conserva es el propio JSON.
+
+El conteo sale del log del servidor, así que depende de que los pedidos lleguen
+al servidor. Hoy el repositorio se sirve sin cachear en el borde
+(`cf-cache-status: DYNAMIC`); si algún día se agrega una regla de caché para los
+paquetes, esos pedidos dejan de verse acá y el número baja sin que nada avise.
+
+### Antes de que sirva: la IP real
+
+Con Cloudflare delante, el servidor ve la IP de Cloudflare en cada pedido y el
+conteo daría 1. El módulo que lo arregla tiene que estar compilado en el nginx
+del panel:
+
+```bash
+nginx -V 2>&1 | grep -o with-http_realip_module
+```
+
+Si no sale nada, aaPanel lo agrega desde la compilación de nginx del panel (ahí
+se eligen los módulos). Con el módulo, en `/www/server/nginx/conf/nginx.conf`,
+dentro del bloque `http {}` —global y no por sitio, para que el panel no lo pise
+al regenerar la configuración—:
+
+```nginx
+# Rangos de Cloudflare, de https://www.cloudflare.com/ips/ — se revisan de vez
+# en cuando; cuando agregan uno, los pedidos desde ahí dejan de contar.
+set_real_ip_from 173.245.48.0/20;
+set_real_ip_from 103.21.244.0/22;
+set_real_ip_from 103.22.200.0/22;
+set_real_ip_from 103.31.4.0/22;
+set_real_ip_from 141.101.64.0/18;
+set_real_ip_from 108.162.192.0/18;
+set_real_ip_from 190.93.240.0/20;
+set_real_ip_from 188.114.96.0/20;
+set_real_ip_from 197.234.240.0/22;
+set_real_ip_from 198.41.128.0/17;
+set_real_ip_from 162.158.0.0/15;
+set_real_ip_from 104.16.0.0/13;
+set_real_ip_from 104.24.0.0/14;
+set_real_ip_from 172.64.0.0/13;
+set_real_ip_from 131.0.72.0/22;
+set_real_ip_from 2400:cb00::/32;
+set_real_ip_from 2606:4700::/32;
+set_real_ip_from 2803:f800::/32;
+set_real_ip_from 2405:b500::/32;
+set_real_ip_from 2405:8100::/32;
+set_real_ip_from 2a06:98c0::/29;
+set_real_ip_from 2c0f:f248::/32;
+real_ip_header CF-Connecting-IP;
+```
+
+`nginx -t && nginx -s reload`, y comprobarlo sobre el log, que es donde se ve:
+
+```bash
+tail -1 /www/wwwlogs/repo.vasak.net.ar.log | cut -d' ' -f1
+```
+
+Si sale una IP de Cloudflare, el bloque no está entrando y el conteo va a dar 1.
+No se usa `set_real_ip_from 0.0.0.0/0`: acepta el encabezado de cualquiera que
+llegue al origen, y con eso cualquiera inventa la IP que quiera.
+
+### Retención de los logs
+
+La ventana de 90 días son 90 días de logs. aaPanel corta los logs según lo que
+tenga configurado el sitio; si guarda siete días, el JSON dice siete —el script
+avisa y escribe `first_day` con el día más viejo que encontró, para que se note—.
+Cuánto hay:
+
+```bash
+ls /www/wwwlogs/repo.vasak.net.ar.log*
+```
+
+### El JSON, fuera del alcance del rsync
+
+El destino del `rsync --delete` es el directorio del repositorio, así que el JSON
+**no** va ahí: el primer upload lo borraría. Va en un directorio propio del
+sitio, por ejemplo `/www/wwwroot/repo.vasak.net.ar/stats/users.json`.
+
+### Cron
+
+```bash
+12 3 * * * /usr/bin/python3 /root/stats/count-users.py \
+  --logs '/www/wwwlogs/repo.vasak.net.ar.log*' \
+  --out /www/wwwroot/repo.vasak.net.ar/stats/users.json
+```
+
+El script no rota logs ni borra nada: se apoya en lo que haya y reescribe el
+JSON entero cada noche, con escritura atómica para que la web nunca lea un
+archivo a medio escribir.
+
+### Servirlo con CORS
+
+La web es otro origen (GitHub Pages), así que necesita el encabezado, igual que
+`vasakos.json`:
+
+```nginx
+location = /stats/users.json {
+    add_header Access-Control-Allow-Origin "https://os.vasak.net.ar" always;
+    add_header Cache-Control "public, max-age=300" always;
+}
+```
+
+### Qué trae el JSON
+
+```json
+{
+  "generated": "2026-11-24T03:12:00Z",
+  "source": "vasakos.db",
+  "window_days": 90,
+  "first_day": "2026-08-29",
+  "last_day": "2026-11-23",
+  "unique_7d": 123,
+  "unique_30d": 210,
+  "unique_90d": 386,
+  "daily": [ { "date": "2026-08-29", "ips": 12 } ]
+}
+```
+
+`unique_90d` es la unión de la ventana, no la suma de los días: una máquina que
+actualiza todos los días cuenta una vez, que es lo que se quiere saber. `daily`
+trae sólo los días con tráfico —un día ausente es un día sin pedidos o sin log,
+y no se rellena con ceros para no inventar una caída que no hubo—.
 
 ---
 
