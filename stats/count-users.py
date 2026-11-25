@@ -21,6 +21,7 @@ import json
 import os
 import re
 import sys
+import zlib
 from collections import defaultdict
 from datetime import date, datetime, timedelta, timezone
 
@@ -76,32 +77,44 @@ def count(paths, since):
         except OSError as e:
             print(f"aviso: no se pudo leer {path}: {e}", file=sys.stderr)
             continue
-        with handle:
-            for line in handle:
-                # Prefiltro barato antes del regex: la mayoría de las líneas no
-                # son del repositorio.
-                if TARGET not in line or AGENT not in line:
-                    continue
-                m = LINE.match(line)
-                if not m:
-                    continue
-                parsed += 1
-                # GET sobre el pedido exacto. El método importa: un HEAD es
-                # alguien mirando si el archivo está, no una máquina que se
-                # actualiza. Y el pedido exacto deja afuera `vasakos.db.sig`.
-                request = m["req"].split(" ")
-                if len(request) < 2 or request[0] != "GET" or request[1] != TARGET:
-                    continue
-                # 4xx y 5xx son bots, escaneos y errores: no son instalaciones.
-                if int(m["status"]) >= 400:
-                    continue
-                try:
-                    day = log_day(m["ts"])
-                except (ValueError, KeyError):
-                    # Una línea con la fecha rota no puede tumbar el cron.
-                    continue
-                if day >= since:
-                    ips[day].add(m["ip"])
+        try:
+            with handle:
+                for line in handle:
+                    # Prefiltro barato antes del regex: la mayoría de las líneas
+                    # no son del repositorio.
+                    if TARGET not in line or AGENT not in line:
+                        continue
+                    m = LINE.match(line)
+                    if not m:
+                        continue
+                    parsed += 1
+                    # El agente se mira en el campo del agente y no en la línea
+                    # entera: un `curl` con `pacman/` en el referer pasaba el
+                    # prefiltro y contaba como una instalación.
+                    if not m["ua"].startswith(AGENT):
+                        continue
+                    # GET sobre el pedido exacto. El método importa: un HEAD es
+                    # alguien mirando si el archivo está, no una máquina que se
+                    # actualiza. Y el pedido exacto deja afuera `vasakos.db.sig`.
+                    request = m["req"].split(" ")
+                    if len(request) < 2 or request[0] != "GET" or request[1] != TARGET:
+                        continue
+                    # 4xx y 5xx son bots, escaneos y errores: no son instalaciones.
+                    if int(m["status"]) >= 400:
+                        continue
+                    try:
+                        day = log_day(m["ts"])
+                    except (ValueError, KeyError):
+                        # Una línea con la fecha rota no puede tumbar el cron.
+                        continue
+                    if day >= since:
+                        ips[day].add(m["ip"])
+        # Un `.gz` cortado abre bien y revienta leyendo. Sin esto, un archivo a
+        # medio escribir deja al cron sin publicar el JSON todos los días hasta
+        # que alguien lo note: se pierde lo que quedaba de ese archivo y se sigue
+        # con los demás.
+        except (OSError, EOFError, zlib.error) as e:
+            print(f"aviso: se cortó la lectura de {path}: {e}", file=sys.stderr)
 
     if parsed == 0 and paths:
         print(
@@ -110,6 +123,38 @@ def count(paths, since):
             file=sys.stderr,
         )
     return ips
+
+
+def logs_from(paths):
+    """El día más viejo que hay en los logs, tenga pedidos o no.
+
+    Sirve para saber si la retención alcanza la ventana, que es otra cosa que
+    `first_day`: un día sin pedidos no dice nada de hasta dónde llegan los logs.
+    Se lee la primera fecha de cada archivo y se corta ahí —los archivos están
+    en orden—, así que cuesta una línea por archivo.
+    """
+    oldest = None
+    for path in paths:
+        try:
+            handle = open_log(path)
+        except OSError:
+            continue
+        try:
+            with handle:
+                for line in handle:
+                    m = LINE.match(line)
+                    if not m:
+                        continue
+                    try:
+                        day = log_day(m["ts"])
+                    except (ValueError, KeyError):
+                        continue
+                    if oldest is None or day < oldest:
+                        oldest = day
+                    break
+        except (OSError, EOFError, zlib.error):
+            continue
+    return oldest
 
 
 def unique(ips, since=None):
@@ -145,6 +190,10 @@ def main():
     args = p.parse_args()
 
     since = today - timedelta(days=args.days - 1)
+    # `unique_7d` y `unique_30d` son de 7 y 30 días siempre, así que se lee al
+    # menos 30: con `--days 7`, cortar la lectura en la ventana dejaba esos dos
+    # números en cero aunque el dato estuviera en el log.
+    history_since = min(since, today - timedelta(days=29))
     patterns = args.logs or ["/www/wwwlogs/repo.vasak.net.ar.log*"]
 
     paths = []
@@ -154,8 +203,11 @@ def main():
             print(f"aviso: {pattern} no coincide con ningún archivo", file=sys.stderr)
         paths.extend(found)
 
-    ips = count(paths, since)
-    if not ips:
+    ips = count(paths, history_since)
+    oldest_log = logs_from(paths)
+    days = [d for d in sorted(ips) if d >= since]
+
+    if not days:
         print(
             "aviso: cero días con tráfico en la ventana. Se escribe el JSON "
             "igual, con los conteos en cero, para no dejar a la web con un "
@@ -163,16 +215,16 @@ def main():
             file=sys.stderr,
         )
 
-    days = sorted(ips)
     doc = {
         "generated": datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
         "source": TARGET.rsplit("/", 1)[-1],
         "window_days": args.days,
+        "logs_from": oldest_log.isoformat() if oldest_log else None,
         "first_day": days[0].isoformat() if days else None,
         "last_day": days[-1].isoformat() if days else None,
         "unique_7d": unique(ips, today - timedelta(days=6)),
         "unique_30d": unique(ips, today - timedelta(days=29)),
-        "unique_90d": unique(ips),
+        "unique_90d": unique(ips, since),
         "daily": [{"date": d.isoformat(), "ips": len(ips[d])} for d in days],
     }
 
@@ -198,11 +250,12 @@ def main():
     )
 
     # Si los logs no llegan tan atrás como la ventana, el número no es de 90
-    # días y hay que verlo, no adivinarlo.
-    if days and days[0] > since + timedelta(days=1):
+    # días y hay que verlo, no adivinarlo. Se mira `logs_from` y no `first_day`:
+    # un día sin pedidos no dice nada de hasta dónde llega la retención.
+    if oldest_log and oldest_log > since + timedelta(days=1):
         print(
-            f"aviso: los logs empiezan el {days[0]}, no el {since}. "
-            f"`unique_90d` cubre {len(days)} días, no {args.days}.",
+            f"aviso: los logs empiezan el {oldest_log}, no el {since}. "
+            f"`unique_90d` cubre desde el {oldest_log}, no {args.days} días.",
             file=sys.stderr,
         )
 

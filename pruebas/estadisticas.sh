@@ -207,6 +207,61 @@ else
   mal "sin --out no imprime el JSON por stdout: $(printf '%s' "$output" | head -c 120)"
 fi
 
+# ── 12. El agente se mira en el campo del agente, no en la línea entera ──────
+d="$tmp/12"; mkdir -p "$d"
+printf '9.9.9.9 - - [%s:10:00:00 +0000] "GET %s HTTP/2" 200 10442 "pacman/7.0.0" "curl/8.5.0"\n' \
+  "$(date_str today)" "$DB" > "$d/access.log"
+run "$d" "$tmp/12.json"
+if [ "$(field "$tmp/12.json" '["unique_90d"]')" = 0 ]; then
+  ok "un curl con pacman en el referer no cuenta"
+else
+  mal "un curl con pacman en el referer contó como instalación: $(cat "$tmp/12.json" | tr -d '\n ')"
+fi
+
+# ── 13. Un .gz truncado no tumba la corrida ──────────────────────────────────
+d="$tmp/13"; mkdir -p "$d"
+log_line 1.1.1.1 "$(date_str today)" "$DB" 200 "$PACMAN" > "$d/access.log"
+log_line 2.2.2.2 "$(date_str today)" "$DB" 200 "$PACMAN" | gzip -c > "$d/access.log.gz"
+head -c -12 "$d/access.log.gz" > "$d/access.log.trunc.gz" &&
+  mv "$d/access.log.trunc.gz" "$d/access.log.gz"
+run "$d" "$tmp/13.json"
+status=$?
+if [ "$status" = 0 ] && [ "$(field "$tmp/13.json" '["unique_90d"]')" = 1 ]; then
+  ok "un .gz truncado se pierde, el resto se cuenta y la corrida sale 0"
+else
+  mal "el .gz truncado tumbó la corrida (salió con $status) o no se cuentan los demás"
+fi
+
+# ── 14. --days pequeño no corta unique_30d ───────────────────────────────────
+d="$tmp/14"; mkdir -p "$d"
+{
+  log_line 1.1.1.1 "$(date_str today)" "$DB" 200 "$PACMAN"
+  log_line 2.2.2.2 "$(date_str '20 days ago')" "$DB" 200 "$PACMAN"
+} > "$d/access.log"
+run "$d" "$tmp/14.json" --days 7
+if [ "$(field "$tmp/14.json" '["unique_7d"]')" = 1 ] &&
+   [ "$(field "$tmp/14.json" '["unique_30d"]')" = 2 ] &&
+   [ "$(field "$tmp/14.json" '["unique_90d"]')" = 1 ] &&
+   [ "$(field "$tmp/14.json" '["first_day"]')" = "$(iso_str today)" ]; then
+  ok "con --days 7: uno hoy, otro de hace 20 días; 7d=1, 30d=2, 90d=1"
+else
+  mal "con --days 7: 7d=$(field "$tmp/14.json" '["unique_7d"]') 30d=$(field "$tmp/14.json" '["unique_30d"]') 90d=$(field "$tmp/14.json" '["unique_90d"]') first_day=$(field "$tmp/14.json" '["first_day"]')"
+fi
+
+# ── 15. logs_from mide hasta dónde llegan los logs, no hasta dónde llega el tráfico
+d="$tmp/15"; mkdir -p "$d"
+{
+  log_line 8.8.8.8 "$(date_str '60 days ago')" /repo/x86_64/otro-0.1-1-x86_64.pkg.tar.zst 200 "$PACMAN"
+  log_line 1.1.1.1 "$(date_str today)" "$DB" 200 "$PACMAN"
+} > "$d/access.log"
+run "$d" "$tmp/15.json"
+if [ "$(field "$tmp/15.json" '["logs_from"]')" = "$(iso_str '60 days ago')" ] &&
+   [ "$(field "$tmp/15.json" '["first_day"]')" = "$(iso_str today)" ]; then
+  ok "logs_from llega al día del log más viejo; first_day al más viejo con tráfico"
+else
+  mal "logs_from o first_day no reflejan la retención: $(cat "$tmp/15.json" | tr -d '\n ')"
+fi
+
 echo
 if [ "$fallos" -eq 0 ]; then
   printf '\033[32mTodo bien.\033[0m\n'

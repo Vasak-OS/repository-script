@@ -328,9 +328,9 @@ llegue al origen, y con eso cualquiera inventa la IP que quiera.
 ### Retención de los logs
 
 La ventana de 90 días son 90 días de logs. aaPanel corta los logs según lo que
-tenga configurado el sitio; si guarda siete días, el JSON dice siete —el script
-avisa y escribe `first_day` con el día más viejo que encontró, para que se note—.
-Cuánto hay:
+tenga configurado el sitio, así que la retención puede ser más corta que la
+ventana: el script lo avisa y escribe `logs_from` con el día más viejo que hay
+en los logs, para que se note. Cuánto hay:
 
 ```bash
 ls /www/wwwlogs/repo.vasak.net.ar.log*
@@ -345,9 +345,7 @@ sitio, por ejemplo `/www/wwwroot/repo.vasak.net.ar/stats/users.json`.
 ### Cron
 
 ```bash
-12 3 * * * /usr/bin/python3 /root/stats/count-users.py \
-  --logs '/www/wwwlogs/repo.vasak.net.ar.log*' \
-  --out /www/wwwroot/repo.vasak.net.ar/stats/users.json
+12 3 * * * /usr/bin/python3 /root/stats/count-users.py --logs '/www/wwwlogs/repo.vasak.net.ar.log*' --out /www/wwwroot/repo.vasak.net.ar/stats/users.json
 ```
 
 El script no rota logs ni borra nada: se apoya en lo que haya y reescribe el
@@ -373,6 +371,7 @@ location = /stats/users.json {
   "generated": "2026-11-24T03:12:00Z",
   "source": "vasakos.db",
   "window_days": 90,
+  "logs_from": "2026-08-27",
   "first_day": "2026-08-29",
   "last_day": "2026-11-23",
   "unique_7d": 123,
@@ -387,9 +386,14 @@ actualiza todos los días cuenta una vez, que es lo que se quiere saber. `daily`
 trae sólo los días con tráfico —un día ausente es un día sin pedidos o sin log,
 y no se rellena con ceros para no inventar una caída que no hubo—.
 
-`unique_7d` y `unique_30d` son de siete y treinta días siempre. `unique_90d` es
-la ventana entera que se le pidió con `--days`, así que con `--days 30` el
-nombre miente: `window_days` es el que dice la verdad.
+`logs_from` es hasta dónde llegan los logs y `first_day` el día más viejo **con
+tráfico**: son cosas distintas, y con poca retención la primera se nota y la
+segunda no.
+
+`unique_7d` y `unique_30d` son de siete y treinta días siempre, también con
+`--days` más chico. `unique_90d` es la ventana entera que se le pidió con
+`--days`, así que con `--days 30` el nombre miente: `window_days` es el que dice
+la verdad.
 
 ---
 
