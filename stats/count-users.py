@@ -39,13 +39,13 @@ LINE = re.compile(
     r'(?P<status>\d{3}) \S+ "[^"]*" "(?P<ua>[^"]*)"'
 )
 
-MESES = {
+MONTHS = {
     m: n
     for n, m in enumerate("Jan Feb Mar Apr May Jun Jul Aug Sep Oct Nov Dec".split(), 1)
 }
 
 
-def dia_del_log(ts):
+def log_day(ts):
     """`24/Nov/2026:14:26:59 +0000` -> date(2026, 11, 24).
 
     A mano y no con strptime porque `%b` depende del locale del servidor y nginx
@@ -55,29 +55,29 @@ def dia_del_log(ts):
     La fecha es la del servidor. Un pedido a las 23:50 cae en el día del
     servidor, no en el del visitante, y para un conteo diario eso alcanza.
     """
-    dia, mes, anio = ts.split(":", 1)[0].split("/")
-    return date(int(anio), MESES[mes], int(dia))
+    day, month, year = ts.split(":", 1)[0].split("/")
+    return date(int(year), MONTHS[month], int(day))
 
 
-def abrir(path):
+def open_log(path):
     if path.endswith(".gz"):
         return gzip.open(path, "rt", errors="replace")
     return open(path, "rt", errors="replace")
 
 
-def contar(paths, desde):
-    """Devuelve {día: {ip, ...}} con lo pedido desde `desde`."""
+def count(paths, since):
+    """Devuelve {día: {ip, ...}} con lo pedido desde `since`."""
     ips = defaultdict(set)
-    parseadas = 0
+    parsed = 0
 
     for path in paths:
         try:
-            fh = abrir(path)
+            handle = open_log(path)
         except OSError as e:
             print(f"aviso: no se pudo leer {path}: {e}", file=sys.stderr)
             continue
-        with fh:
-            for line in fh:
+        with handle:
+            for line in handle:
                 # Prefiltro barato antes del regex: la mayoría de las líneas no
                 # son del repositorio.
                 if TARGET not in line or AGENT not in line:
@@ -85,23 +85,25 @@ def contar(paths, desde):
                 m = LINE.match(line)
                 if not m:
                     continue
-                parseadas += 1
-                # El pedido exacto, para que `vasakos.db.sig` no pase.
-                pedido = m["req"].split(" ")
-                if len(pedido) < 2 or pedido[1] != TARGET:
+                parsed += 1
+                # GET sobre el pedido exacto. El método importa: un HEAD es
+                # alguien mirando si el archivo está, no una máquina que se
+                # actualiza. Y el pedido exacto deja afuera `vasakos.db.sig`.
+                request = m["req"].split(" ")
+                if len(request) < 2 or request[0] != "GET" or request[1] != TARGET:
                     continue
                 # 4xx y 5xx son bots, escaneos y errores: no son instalaciones.
                 if int(m["status"]) >= 400:
                     continue
                 try:
-                    dia = dia_del_log(m["ts"])
+                    day = log_day(m["ts"])
                 except (ValueError, KeyError):
                     # Una línea con la fecha rota no puede tumbar el cron.
                     continue
-                if dia >= desde:
-                    ips[dia].add(m["ip"])
+                if day >= since:
+                    ips[day].add(m["ip"])
 
-    if parseadas == 0 and paths:
+    if parsed == 0 and paths:
         print(
             "aviso: ninguna línea se pudo parsear. ¿El formato del log no es "
             "`combined`, o las rutas de --logs no son las correctas?",
@@ -110,16 +112,16 @@ def contar(paths, desde):
     return ips
 
 
-def unicas(ips, desde=None):
+def unique(ips, since=None):
     total = set()
-    for dia, conjunto in ips.items():
-        if desde is None or dia >= desde:
-            total |= conjunto
+    for day, seen in ips.items():
+        if since is None or day >= since:
+            total |= seen
     return len(total)
 
 
 def main():
-    hoy = date.today()
+    today = date.today()
 
     p = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     p.add_argument(
@@ -136,23 +138,23 @@ def main():
     p.add_argument("--days", type=int, default=90, help="ventana en días (90)")
     p.add_argument(
         "--print",
-        dest="imprimir",
+        dest="print_json",
         action="store_true",
         help="imprimir el JSON por stdout además de escribirlo",
     )
     args = p.parse_args()
 
-    desde = hoy - timedelta(days=args.days - 1)
-    patrones = args.logs or ["/www/wwwlogs/repo.vasak.net.ar.log*"]
+    since = today - timedelta(days=args.days - 1)
+    patterns = args.logs or ["/www/wwwlogs/repo.vasak.net.ar.log*"]
 
     paths = []
-    for patron in patrones:
-        encontrados = sorted(glob.glob(patron))
-        if not encontrados:
-            print(f"aviso: {patron} no coincide con ningún archivo", file=sys.stderr)
-        paths.extend(encontrados)
+    for pattern in patterns:
+        found = sorted(glob.glob(pattern))
+        if not found:
+            print(f"aviso: {pattern} no coincide con ningún archivo", file=sys.stderr)
+        paths.extend(found)
 
-    ips = contar(paths, desde)
+    ips = count(paths, since)
     if not ips:
         print(
             "aviso: cero días con tráfico en la ventana. Se escribe el JSON "
@@ -161,44 +163,46 @@ def main():
             file=sys.stderr,
         )
 
-    dias = sorted(ips)
+    days = sorted(ips)
     doc = {
         "generated": datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
         "source": TARGET.rsplit("/", 1)[-1],
         "window_days": args.days,
-        "first_day": dias[0].isoformat() if dias else None,
-        "last_day": dias[-1].isoformat() if dias else None,
-        "unique_7d": unicas(ips, hoy - timedelta(days=6)),
-        "unique_30d": unicas(ips, hoy - timedelta(days=29)),
-        "unique_90d": unicas(ips),
-        "daily": [{"date": d.isoformat(), "ips": len(ips[d])} for d in dias],
+        "first_day": days[0].isoformat() if days else None,
+        "last_day": days[-1].isoformat() if days else None,
+        "unique_7d": unique(ips, today - timedelta(days=6)),
+        "unique_30d": unique(ips, today - timedelta(days=29)),
+        "unique_90d": unique(ips),
+        "daily": [{"date": d.isoformat(), "ips": len(ips[d])} for d in days],
     }
 
-    texto = json.dumps(doc, indent=2, ensure_ascii=False) + "\n"
+    text = json.dumps(doc, indent=2, ensure_ascii=False) + "\n"
 
     if args.out:
         # Atómico: la web puede estar leyendo el archivo mientras se reescribe.
-        tmp = args.out + ".tmp"
+        # El pid en el nombre evita que dos corridas solapadas compartan el
+        # temporal y una le borre el archivo a la otra.
+        tmp = f"{args.out}.{os.getpid()}.tmp"
         os.makedirs(os.path.dirname(os.path.abspath(args.out)), exist_ok=True)
-        with open(tmp, "w", encoding="utf-8") as fh:
-            fh.write(texto)
+        with open(tmp, "w", encoding="utf-8") as handle:
+            handle.write(text)
         os.replace(tmp, args.out)
 
-    if args.imprimir or not args.out:
-        sys.stdout.write(texto)
+    if args.print_json or not args.out:
+        sys.stdout.write(text)
 
     print(
-        f"{len(paths)} archivo(s), {len(dias)} día(s) con tráfico, "
+        f"{len(paths)} archivo(s), {len(days)} día(s) con tráfico, "
         f"{doc['unique_90d']} IP(s) únicas en {args.days} días",
         file=sys.stderr,
     )
 
     # Si los logs no llegan tan atrás como la ventana, el número no es de 90
     # días y hay que verlo, no adivinarlo.
-    if dias and dias[0] > desde + timedelta(days=1):
+    if days and days[0] > since + timedelta(days=1):
         print(
-            f"aviso: los logs empiezan el {dias[0]}, no el {desde}. "
-            f"`unique_90d` cubre {len(dias)} días, no {args.days}.",
+            f"aviso: los logs empiezan el {days[0]}, no el {since}. "
+            f"`unique_90d` cubre {len(days)} días, no {args.days}.",
             file=sys.stderr,
         )
 

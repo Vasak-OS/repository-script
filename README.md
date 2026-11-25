@@ -387,6 +387,10 @@ actualiza todos los días cuenta una vez, que es lo que se quiere saber. `daily`
 trae sólo los días con tráfico —un día ausente es un día sin pedidos o sin log,
 y no se rellena con ceros para no inventar una caída que no hubo—.
 
+`unique_7d` y `unique_30d` son de siete y treinta días siempre. `unique_90d` es
+la ventana entera que se le pidió con `--days`, así que con `--days 30` el
+nombre miente: `window_days` es el que dice la verdad.
+
 ---
 
 ## Common tasks
