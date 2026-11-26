@@ -110,7 +110,7 @@ describe("autoindex: organise", () => {
     expect(pkg.label).toBe("polkit-vasak-agent");
     expect(pkg.version).toBe("0.8.10-1");
     expect(pkg.arch).toBe("x86_64");
-    expect(pkg.detail).toBe("Agente de autenticación");
+    expect(pkg.desc).toBe("Agente de autenticación");
   });
 
   test("no muestra ../ ni .sig ni vasakos.json", () => {
@@ -134,7 +134,7 @@ describe("autoindex: matches", () => {
     label: "polkit-vasak-agent",
     kind: "paquete",
     version: "0.8.10-1",
-    detail: "Agente de autenticación PolicyKit",
+    desc: "Agente de autenticación PolicyKit",
   };
   test("vacío coincide", () => expect(api.matches(entry, "")).toBe(true));
   test("coincide en nombre de archivo", () => expect(api.matches(entry, "pkg")).toBe(true));
