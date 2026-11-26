@@ -1,13 +1,10 @@
 /*
- * Listado con estilo del servidor de paquetes.
+ * Listado con estilo del servidor de paquetes — Once UI + VasakOS.
  *
  * El servidor manda el autoindex de nginx en JSON (autoindex_format json) y este
- * archivo lo convierte en una tabla. No hay backend: todo lo que se ve sale del
- * JSON que nginx ya escribe, más `vasakos.json` cuando existe en la carpeta, que
- * es el que agrega versión y descripción a los paquetes.
- *
- * Lo que no se dibuja en el navegador es un `<noscript>` que dice la verdad: los
- * archivos están, el listado es lo que falta.
+ * archivo lo convierte en una tabla interactiva. No hay backend: todo lo que se
+ * ve sale del JSON que nginx ya escribe, más `vasakos.json` cuando existe en la
+ * carpeta, que es el que agrega versión, arquitectura y descripción a los paquetes.
  *
  * Para las pruebas se carga con Node, que no tiene `document`: en ese caso sólo
  * se exportan las funciones puras y no se toca el DOM.
@@ -20,10 +17,10 @@
   /** El índice que baja pacman. Se muestra aparte, plegado, para no tapar los paquetes. */
   const PACKAGE_INDEX = /^vasakos\.(db|files)$/;
   const PACKAGE = /\.pkg\.tar\.(zst|xz)$/;
-  const FOLDER = 'carpeta';
-  const PACKAGE_KIND = 'paquete';
-  const INDEX = 'índice';
-  const FILE = 'archivo';
+  const KIND_FOLDER = 'carpeta';
+  const KIND_PACKAGE = 'paquete';
+  const KIND_INDEX = 'índice';
+  const KIND_FILE = 'archivo';
 
   function formatBytes(bytes) {
     if (typeof bytes !== 'number' || !Number.isFinite(bytes) || bytes < 0) return '—';
@@ -48,7 +45,7 @@
     return new Intl.DateTimeFormat('es', { day: 'numeric', month: 'short', year: 'numeric' }).format(date);
   }
 
-  /** `apparmor.d-tools-0.4916.0-1-x86_64.pkg.tar.zst` → nombre y versión, cuando no hay json que lo diga. */
+  /** `apparmor.d-tools-0.4916.0-1-x86_64.pkg.tar.zst` → nombre, versión, arquitectura. */
   function parsePackageName(filename) {
     const match = /^(.+)-([^-]+)-([^-]+)-(x86_64|any|aarch64)\.pkg\.tar\.(zst|xz)$/.exec(filename);
     if (!match) return { name: filename, version: '', arch: '' };
@@ -84,7 +81,7 @@
       const name = entry && entry.name;
       if (!name || name === '../' || HIDDEN.test(name)) return;
       if (entry.type === 'directory') {
-        folders.push({ name, label: name, href: encodeURIComponent(name) + '/', kind: FOLDER, mtime: entry.mtime });
+        folders.push({ name, label: name, href: encodeURIComponent(name) + '/', kind: KIND_FOLDER, mtime: entry.mtime });
         return;
       }
       const href = encodeURIComponent(name);
@@ -95,10 +92,10 @@
           name,
           label: parsed.name,
           href,
-          kind: PACKAGE_KIND,
+          kind: KIND_PACKAGE,
           version: parsed.version,
-          arch: (pkg && pkg.arch) || parsePackageName(name).arch || '',
-          detail: pkg && pkg.desc ? pkg.desc : '',
+          arch: (pkg && pkg.arch) || parsed.arch || '',
+          desc: pkg && pkg.desc ? pkg.desc : '',
           install: parsed.name,
           size: entry.size,
           mtime: entry.mtime,
@@ -109,10 +106,10 @@
         name,
         label: name,
         href,
-        kind: PACKAGE_INDEX.test(name) ? INDEX : FILE,
+        kind: PACKAGE_INDEX.test(name) ? KIND_INDEX : KIND_FILE,
         version: '',
         arch: '',
-        detail: '',
+        desc: '',
         install: '',
         size: entry.size,
         mtime: entry.mtime,
@@ -124,7 +121,7 @@
 
   /** Lo que cuenta el encabezado: paquetes y su tamaño, o carpetas si no hay archivos. */
   function summarise(organised) {
-    const packages = organised.files.filter((file) => file.kind === PACKAGE_KIND);
+    const packages = organised.files.filter((file) => file.kind === KIND_PACKAGE);
     const bytes = packages.reduce((total, file) => total + (Number.isFinite(file.size) ? file.size : 0), 0);
     return {
       packages: packages.length,
@@ -147,7 +144,7 @@
 
   function matches(entry, query) {
     if (!query) return true;
-    const haystack = [entry.name, entry.label, entry.kind, entry.version, entry.detail].join(' ');
+    const haystack = [entry.name, entry.label, entry.kind, entry.version, entry.desc, entry.arch].join(' ');
     return normalise(haystack).includes(query);
   }
 
@@ -161,32 +158,39 @@
   const doc = global.document;
   const state = { folders: [], files: [], query: '' };
 
-  function element(tag, className, text) {
+  function el(tag, className, text) {
     const node = doc.createElement(tag);
     if (className) node.className = className;
     if (text !== undefined) node.textContent = text;
     return node;
   }
 
+  function icon(name, className) {
+    const i = doc.createElement('i');
+    i.className = 'icon icon-' + name + (className ? ' ' + className : '');
+    i.setAttribute('aria-hidden', 'true');
+    return i;
+  }
+
   function renderCrumbs() {
-    const nav = doc.getElementById('crumbs');
+    const nav = doc.getElementById('breadcrumb');
     if (!nav) return;
     const crumbs = buildCrumbs(global.location.pathname);
     nav.textContent = '';
     crumbs.forEach((crumb, position) => {
       const last = position === crumbs.length - 1;
-      if (position > 0) nav.append(element('span', 'sep', '/'));
+      if (position > 0) nav.append(el('span', 'sep', '/'));
       if (last) {
-        const current = element('span', 'here', crumb.label);
+        const current = el('span', 'here', crumb.label);
         current.setAttribute('aria-current', 'page');
         nav.append(current);
       } else {
-        const link = element('a', '', crumb.label);
+        const link = el('a', '', crumb.label);
         link.href = crumb.href;
         nav.append(link);
       }
     });
-    const heading = doc.getElementById('heading');
+    const heading = doc.getElementById('page-title');
     if (heading) heading.textContent = crumbs[crumbs.length - 1].label;
     doc.title = crumbs[crumbs.length - 1].label + ' · VasakOS repositorio';
   }
@@ -194,64 +198,70 @@
   function copyCommand(button, command) {
     if (!global.navigator.clipboard || !global.navigator.clipboard.writeText) return;
     global.navigator.clipboard.writeText(command).then(() => {
-      button.textContent = 'Copiado';
+      const original = button.innerHTML;
+      button.innerHTML = '';
+      button.append('Copiado');
+      button.disabled = true;
       global.setTimeout(() => {
-        button.textContent = 'Copiar';
+        button.innerHTML = original;
+        button.disabled = false;
       }, 1500);
     }, () => {});
   }
 
-  function folderRow(folder) {
-    const item = element('li');
-    const link = element('a', 'folder', folder.name);
+  function folderItem(folder) {
+    const item = el('li', 'folder-item');
+    const link = el('a', 'folder-link', '');
     link.href = folder.href;
-    item.append(link, element('span', 'muted', formatDate(folder.mtime)));
+    link.append(icon('folder'), folder.name);
+    item.append(link, el('span', 'folder-meta', formatDate(folder.mtime)));
     return item;
   }
 
   function fileRow(file) {
-    const row = element('tr');
-
-    const name = element('td', 'cell-name');
-    const link = element('a', file.kind === PACKAGE_KIND ? 'package' : 'plain', file.label);
+    const row = el('tr');
+    const name = el('td', 'col-name');
+    const link = el('a', 'file-name' + (file.kind === KIND_PACKAGE ? ' package' : ''), '');
     link.href = file.href;
-    // El nombre del paquete no es el del archivo: el archivo queda en el tooltip
-    // para quien necesite la URL exacta, y la fila se lee como el paquete.
-    link.title = file.name;
-    name.append(link);
-    if (file.detail) name.append(element('span', 'detail', file.detail));
+    link.title = file.name; // el archivo exacto en tooltip
 
-    const version = element('td', 'cell-version');
-    version.append(file.version || '—');
-    if (file.arch) version.append(element('span', 'arch', ' · ' + file.arch));
-    const size = element('td', 'cell-size', formatBytes(file.size));
-    const date = element('td', 'cell-date', formatDate(file.mtime));
-    const action = element('td', 'cell-action');
+    const iconClass = file.kind === KIND_PACKAGE ? 'package' :
+                      file.kind === KIND_INDEX ? 'database' :
+                      file.kind === KIND_FOLDER ? 'folder' : 'file';
+    link.append(icon(iconClass), file.label);
+    if (file.desc) link.append(el('span', 'file-desc', file.desc));
+    if (file.arch) link.append(el('span', 'file-arch', file.arch));
+    name.append(link);
+
+    const version = el('td', 'col-version', file.version || '—');
+    const size = el('td', 'col-size', formatBytes(file.size));
+    const date = el('td', 'col-date', formatDate(file.mtime));
+    const action = el('td', 'col-action');
     if (file.install) {
-      const button = element('button', 'copy', 'Copiar');
+      const button = el('button', 'btn-copy', '');
       button.type = 'button';
       button.setAttribute('aria-label', 'Copiar el comando para instalar ' + file.install);
+      button.append(icon('copy'), 'Copiar');
       button.addEventListener('click', () => copyCommand(button, 'sudo pacman -S ' + file.install));
       action.append(button);
     }
-
     row.append(name, version, size, date, action);
     return row;
   }
 
   function table(rows) {
-    const wrap = element('div', 'scroll');
-    const node = element('table', 'files');
-    node.append(element('caption', 'sr', 'Archivos de esta carpeta'));
-    const head = element('thead');
-    const headRow = element('tr');
+    const wrap = el('div', 'table-wrap');
+    const node = el('table', 'files-table');
+    node.append(el('caption', 'sr-only', 'Archivos de esta carpeta'));
+    const head = el('thead');
+    const headRow = el('tr');
     ['Nombre', 'Versión', 'Tamaño', 'Fecha', ''].forEach((label) => {
-      const cell = element('th', '', label);
+      const cell = el('th', '', label);
       cell.scope = 'col';
       headRow.append(cell);
     });
     head.append(headRow);
-    const body = element('tbody');
+    const body = el('tbody');
     rows.forEach((row) => body.append(row));
     node.append(head, body);
     wrap.append(node);
@@ -259,13 +269,13 @@
   }
 
   function paint() {
-    const listing = doc.getElementById('listado');
-    const meta = doc.getElementById('meta');
+    const listing = doc.getElementById('listing');
+    const meta = doc.getElementById('toolbar-meta');
     if (!listing || !meta) return;
 
     const folders = state.folders.filter((folder) => matches(folder, state.query));
-    const files = state.files.filter((file) => file.kind !== INDEX && matches(file, state.query));
-    const indexes = state.files.filter((file) => file.kind === INDEX);
+    const files = state.files.filter((file) => file.kind !== KIND_INDEX && matches(file, state.query));
+    const indexes = state.files.filter((file) => file.kind === KIND_INDEX);
 
     if (state.query) {
       const total = folders.length + files.length;
@@ -283,36 +293,37 @@
     listing.textContent = '';
 
     if (folders.length) {
-      const section = element('section', 'group');
-      const title = element('h2', '', 'Carpetas');
-      const list = element('ul', 'folders');
-      folders.forEach((folder) => list.append(folderRow(folder)));
-      section.append(title, list);
+      const section = el('section', 'group');
+      section.append(el('h2', 'group-title', 'Carpetas'));
+      const list = el('ul', 'folders');
+      folders.forEach((folder) => list.append(folderItem(folder)));
+      section.append(list);
       listing.append(section);
     }
 
     if (files.length) {
-      const section = element('section', 'group');
-      section.append(element('h2', '', 'Archivos'));
+      const section = el('section', 'group');
+      section.append(el('h2', 'group-title', 'Archivos'));
       section.append(table(files.map(fileRow)));
       listing.append(section);
     }
 
     if (!folders.length && !files.length && !state.query) {
-      listing.append(element('p', 'empty', 'Esta carpeta está vacía.'));
+      listing.append(el('p', 'empty-state', 'Esta carpeta está vacía.'));
     }
 
     if (indexes.length && !state.query) {
-      const details = element('details', 'indexes');
-      details.append(element('summary', '', 'Índice de pacman'));
+      const details = el('details', 'indexes');
+      details.append(el('summary', '', 'Índice de pacman'));
       indexes.forEach((file) => {
-        const link = element('a', 'plain', file.name);
+        const p = el('p', '');
+        const link = el('a', 'index-link', '');
         link.href = file.href;
-        const line = element('p', 'muted');
-        line.append(link, element('span', '', ' · ' + formatBytes(file.size) + ' · ' + formatDate(file.mtime)));
-        details.append(line);
+        link.append(icon('database'), file.name);
+        p.append(link, el('span', 'index-meta', ' · ' + formatBytes(file.size) + ' · ' + formatDate(file.mtime)));
+        details.append(p);
       });
-      details.append(element('p', 'muted small', 'Lo descarga pacman al actualizar; no hace falta bajarlo a mano.'));
+      details.append(el('p', 'index-note', 'Lo descarga pacman al actualizar; no hace falta bajarlo a mano.'));
       listing.append(details);
     }
   }
@@ -328,7 +339,7 @@
 
   function start() {
     renderCrumbs();
-    const holder = doc.getElementById('entries');
+    const holder = doc.getElementById('entries-data');
     let entries;
     try {
       entries = JSON.parse(holder ? holder.textContent : '[]');
@@ -353,12 +364,23 @@
       paint();
     });
 
-    const filter = doc.getElementById('filter');
+    const filter = doc.getElementById('filter-input');
+    const clearBtn = doc.querySelector('.clear-btn');
     if (filter) {
       filter.addEventListener('input', () => {
         state.query = normalise(filter.value).trim();
         paint();
+        if (clearBtn) clearBtn.hidden = !state.query;
       });
+      if (clearBtn) {
+        clearBtn.addEventListener('click', () => {
+          filter.value = '';
+          state.query = '';
+          clearBtn.hidden = true;
+          paint();
+          filter.focus();
+        });
+      }
     }
   }
 

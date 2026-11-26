@@ -4,30 +4,47 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>VasakOS · repositorio</title>
+<link rel="preload" href="/.autoindex/fonts/VSKRegular.ttf" as="font" type="font/ttf" crossorigin>
 <link rel="stylesheet" href="/.autoindex/autoindex.css">
 </head>
 <body>
-<a class="escape" href="#listado">Saltar al listado</a>
+<a class="skip-link" href="#main-content">Saltar al contenido principal</a>
 
-<header class="top">
-  <div class="wrap top-in">
-    <a class="brand" href="https://os.vasak.net.ar/">VasakOS</a>
-    <nav class="crumbs" id="crumbs" aria-label="Ruta"></nav>
+<header class="site-header" role="banner">
+  <div class="header-inner">
+    <a class="brand" href="https://os.vasak.net.ar/" aria-label="VasakOS — Inicio">
+      <svg class="brand-logo" aria-hidden="true" viewBox="0 0 120 30" width="48" height="12">
+        <text x="0" y="22" font-family="VSKRegular, var(--font-title)" font-size="22" font-weight="400" fill="currentColor">VasakOS</text>
+      </svg>
+      <span class="brand-text">
+        <span class="brand-name">VasakOS</span>
+        <span class="brand-subtitle">repositorio oficial</span>
+      </span>
+    </a>
+    <nav class="breadcrumb" id="breadcrumb" aria-label="Ruta de navegación"></nav>
   </div>
 </header>
 
-<main class="wrap">
-  <h1 id="heading">Repositorio</h1>
-  <p class="lead">Paquetes de VasakOS para <code>pacman</code>. La lista la arma el servidor a partir de la carpeta; los paquetes se instalan con <code>sudo pacman -S nombre</code> después de agregar el repositorio, que está explicado en <a href="https://os.vasak.net.ar/downloads/">la página de descargas</a>.</p>
-
-  <div class="toolbar">
-    <label class="field">
-      <span class="sr">Filtrar</span>
-      <input id="filter" type="search" placeholder="Filtrar por nombre, versión o descripción" autocomplete="off" spellcheck="false" enterkeyhint="search">
-    </label>
-    <p class="meta" id="meta" aria-live="polite"></p>
+<main id="main-content" class="main-content" role="main">
+  <div class="page-header">
+    <h1 class="page-title" id="page-title">Repositorio</h1>
+    <p class="page-lead">Paquetes de VasakOS para <code>pacman</code>. Agrega el repositorio siguiendo <a href="https://os.vasak.net.ar/downloads/">la guía de descargas</a> y luego instala con <code>sudo pacman -S <paquete></code>.</p>
   </div>
 
-  <div id="listado" class="listing">
-    <noscript><p class="empty">El listado se arma con JavaScript; los archivos están en la carpeta igual. Con <code>wget -r</code> en la vista sin estilo de nginx (<a href="?raw=1">enlace directo</a>) o mirando el código de la página también se llega.</p></noscript>
-    <script type="application/json" id="entries">
+  <div class="toolbar" role="search" aria-label="Filtrar paquetes">
+    <label class="search-field" for="filter-input">
+      <span class="sr-only">Filtrar por nombre, versión, descripción o arquitectura</span>
+      <span class="search-icon" aria-hidden="true"><i class="icon icon-search"></i></span>
+      <input id="filter-input" type="search" placeholder="Filtrar paquetes…" autocomplete="off" spellcheck="false" enterkeyhint="search">
+      <button type="button" class="clear-btn" aria-label="Limpiar filtro" hidden><i class="icon icon-xmark"></i></button>
+    </label>
+    <div class="toolbar-meta" id="toolbar-meta" aria-live="polite"></div>
+  </div>
+
+  <section id="listing" class="listing" aria-label="Contenido de la carpeta">
+    <noscript>
+      <div class="noscript-notice">
+        <p>El listado interactivo requiere JavaScript. Los archivos están disponibles inspeccionando el código de la página (el JSON con la lista está en el bloque <code><script type="application/json"></code>).</p>
+      </div>
+    </noscript>
+    <script type="application/json" id="entries-data">
