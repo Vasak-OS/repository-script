@@ -67,9 +67,16 @@ def open_log(path):
 
 
 def count(paths, since):
-    """Devuelve {día: {ip, ...}} con lo pedido desde `since`."""
+    """Devuelve ({día: {ip, ...}}, día más viejo del log).
+
+    El segundo valor es hasta dónde llegan los logs, tenga pedidos o no: sirve
+    para saber si la retención alcanza la ventana, que es otra cosa que el día
+    más viejo con tráfico. Se toma del mismo paso que el conteo para que un
+    archivo descartado no aporte cobertura que después no respalda ninguna IP.
+    """
     ips = defaultdict(set)
     parsed = 0
+    oldest = None
 
     for path in paths:
         try:
@@ -83,9 +90,20 @@ def count(paths, since):
         # error: contarlas haría que el número dependa de dónde cortó el
         # archivo. Un archivo que no se pudo leer entero no se cuenta.
         file_ips = defaultdict(set)
+        file_oldest = None
         try:
             with handle:
                 for line in handle:
+                    # La primera fecha del archivo, para la retención: los
+                    # archivos están en orden, así que la primera es la más
+                    # vieja y no hay que leer el resto.
+                    if file_oldest is None:
+                        first = LINE.match(line)
+                        if first:
+                            try:
+                                file_oldest = log_day(first["ts"])
+                            except (ValueError, KeyError):
+                                pass
                     # Prefiltro barato antes del regex: la mayoría de las líneas
                     # no son del repositorio.
                     if TARGET not in line or AGENT not in line:
@@ -122,6 +140,8 @@ def count(paths, since):
             continue
         for day, day_ips in file_ips.items():
             ips[day] |= day_ips
+        if file_oldest and (oldest is None or file_oldest < oldest):
+            oldest = file_oldest
 
     if parsed == 0 and paths:
         print(
@@ -129,39 +149,7 @@ def count(paths, since):
             "`combined`, o las rutas de --logs no son las correctas?",
             file=sys.stderr,
         )
-    return ips
-
-
-def logs_from(paths):
-    """El día más viejo que hay en los logs, tenga pedidos o no.
-
-    Sirve para saber si la retención alcanza la ventana, que es otra cosa que
-    `first_day`: un día sin pedidos no dice nada de hasta dónde llegan los logs.
-    Se lee la primera fecha de cada archivo y se corta ahí —los archivos están
-    en orden—, así que cuesta una línea por archivo.
-    """
-    oldest = None
-    for path in paths:
-        try:
-            handle = open_log(path)
-        except OSError:
-            continue
-        try:
-            with handle:
-                for line in handle:
-                    m = LINE.match(line)
-                    if not m:
-                        continue
-                    try:
-                        day = log_day(m["ts"])
-                    except (ValueError, KeyError):
-                        continue
-                    if oldest is None or day < oldest:
-                        oldest = day
-                    break
-        except (OSError, EOFError, zlib.error):
-            continue
-    return oldest
+    return ips, oldest
 
 
 def unique(ips, since=None):
@@ -210,8 +198,7 @@ def main():
             print(f"aviso: {pattern} no coincide con ningún archivo", file=sys.stderr)
         paths.extend(found)
 
-    ips = count(paths, history_since)
-    oldest_log = logs_from(paths)
+    ips, oldest_log = count(paths, history_since)
     days = [d for d in sorted(ips) if d >= since]
 
     if not days:

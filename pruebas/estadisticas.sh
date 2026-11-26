@@ -291,6 +291,28 @@ else
   mal "logs_from o first_day no reflejan la retención: $(cat "$tmp/15.json" | tr -d '\n ')"
 fi
 
+# ── 16. Un archivo descartado no aporta cobertura ────────────────────────────
+#
+# `logs_from` es hasta dónde llegan los logs. Si lo toma del archivo roto que el
+# conteo descartó, el JSON dice que los logs llegan más atrás de lo que en
+# realidad se leyó, y el aviso de retención se queda callado.
+d="$tmp/16"; mkdir -p "$d"
+{
+  log_line 192.0.2.77 "$(date_str '60 days ago')" "$DB" 200 "$PACMAN"
+  log_line 192.0.2.78 "$(date_str today)" "$DB" 200 "$PACMAN"
+} | gzip -c > "$d/old.log.gz"
+size=$(stat -c %s "$d/old.log.gz")
+head -c $((size - 8)) "$d/old.log.gz" > "$d/cut.gz" && mv "$d/cut.gz" "$d/old.log.gz"
+log_line 1.1.1.1 "$(date_str today)" "$DB" 200 "$PACMAN" > "$d/access.log"
+run "$d" "$tmp/16.json"
+if [ "$(field "$tmp/16.json" '["logs_from"]')" = "$(iso_str today)" ] &&
+   [ "$(field "$tmp/16.json" '["first_day"]')" = "$(iso_str today)" ] &&
+   [ "$(field "$tmp/16.json" '["unique_90d"]')" = 1 ]; then
+  ok "un archivo descartado no aporta cobertura: logs_from queda en el log que sí se leyó"
+else
+  mal "el archivo roto aportó cobertura: $(cat "$tmp/16.json" | tr -d '\n ')"
+fi
+
 echo
 if [ "$fallos" -eq 0 ]; then
   printf '\033[32mTodo bien.\033[0m\n'
