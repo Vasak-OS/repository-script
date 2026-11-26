@@ -13,8 +13,13 @@
 <header class="site-header" role="banner">
   <div class="header-inner">
     <a class="brand" href="https://os.vasak.net.ar/" aria-label="VasakOS — Inicio">
-      <span class="brand-mark" aria-hidden="true">VasakOS</span>
-      <span class="brand-subtitle">repositorio oficial</span>
+      <svg class="brand-logo" aria-hidden="true" viewBox="0 0 120 30" width="48" height="12">
+        <text x="0" y="22" font-family="VSKRegular, var(--font-title)" font-size="22" font-weight="400" fill="currentColor">VasakOS</text>
+      </svg>
+      <span class="brand-text">
+        <span class="brand-name">VasakOS</span>
+        <span class="brand-subtitle">repositorio oficial</span>
+      </span>
     </a>
     <nav class="breadcrumb" id="breadcrumb" aria-label="Ruta de navegación"></nav>
   </div>
@@ -39,7 +44,7 @@
   <section id="listing" class="listing" aria-label="Contenido de la carpeta">
     <noscript>
       <div class="noscript-notice">
-        <p>El listado interactivo requiere JavaScript. Los archivos están disponibles en la <a href="?raw=1">vista sin estilo de nginx</a> o inspeccionando el código de la página.</p>
+        <p>El listado interactivo requiere JavaScript. Los archivos están disponibles inspeccionando el código de la página (el JSON con la lista está en el bloque <code><script type="application/json"></code>).</p>
       </div>
     </noscript>
     <script type="application/json" id="entries-data">
