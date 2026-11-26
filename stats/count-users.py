@@ -77,6 +77,12 @@ def count(paths, since):
         except OSError as e:
             print(f"aviso: no se pudo leer {path}: {e}", file=sys.stderr)
             continue
+        # Lo de cada archivo se junta aparte y se suma recién cuando se leyó
+        # entero. Un `.gz` cortado no revienta al abrirlo, sino leyendo, y
+        # depende del compresor cuántas líneas alcance a soltar antes del
+        # error: contarlas haría que el número dependa de dónde cortó el
+        # archivo. Un archivo que no se pudo leer entero no se cuenta.
+        file_ips = defaultdict(set)
         try:
             with handle:
                 for line in handle:
@@ -108,13 +114,14 @@ def count(paths, since):
                         # Una línea con la fecha rota no puede tumbar el cron.
                         continue
                     if day >= since:
-                        ips[day].add(m["ip"])
-        # Un `.gz` cortado abre bien y revienta leyendo. Sin esto, un archivo a
-        # medio escribir deja al cron sin publicar el JSON todos los días hasta
-        # que alguien lo note: se pierde lo que quedaba de ese archivo y se sigue
-        # con los demás.
+                        file_ips[day].add(m["ip"])
+        # Sin esto, un archivo a medio escribir deja al cron sin publicar el JSON
+        # todos los días hasta que alguien lo note.
         except (OSError, EOFError, zlib.error) as e:
-            print(f"aviso: se cortó la lectura de {path}: {e}", file=sys.stderr)
+            print(f"aviso: se descarta {path}, no se pudo leer entero: {e}", file=sys.stderr)
+            continue
+        for day, day_ips in file_ips.items():
+            ips[day] |= day_ips
 
     if parsed == 0 and paths:
         print(

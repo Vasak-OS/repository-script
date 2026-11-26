@@ -55,6 +55,23 @@ run() { # dir-de-logs, json, [args…]
   python3 "$script" --logs "$1/*" --out "$2" "${@:3}" 2>/dev/null
 }
 
+# Cuántas líneas alcanza a soltar un .gz cortado antes de reventar. El script no
+# tiene que contar ninguna; esto es para comprobar que el fixture corta donde se
+# cree que corta y no sobre un archivo que no soltó nada.
+gz_lines_before_failure() {
+  python3 - "$1" <<'PY'
+import gzip, sys
+n = 0
+try:
+    with gzip.open(sys.argv[1], "rt", errors="replace") as fh:
+        for _ in fh:
+            n += 1
+except Exception:
+    pass
+print(n)
+PY
+}
+
 printf '\033[1mContar instalaciones\033[0m\n'
 
 # ── 1. La misma máquina que pide dos veces cuenta una ────────────────────────
@@ -218,18 +235,30 @@ else
   mal "un curl con pacman en el referer contó como instalación: $(cat "$tmp/12.json" | tr -d '\n ')"
 fi
 
-# ── 13. Un .gz truncado no tumba la corrida ──────────────────────────────────
+# ── 13. Un .gz truncado se descarta entero ───────────────────────────────────
+#
+# El `.gz` tiene que ser grande a propósito. gzip descomprime en bloques, así que
+# un archivo cortado cerca del final suelta miles de líneas antes de reventar;
+# con una sola línea no suelta ninguna y la prueba pasaría igual aunque el script
+# contara el pedazo leído. Se comprueba primero que el fixture corte donde se
+# cree que corta, y si no, la prueba falla por el fixture y no por el script.
 d="$tmp/13"; mkdir -p "$d"
-log_line 1.1.1.1 "$(date_str today)" "$DB" 200 "$PACMAN" > "$d/access.log"
-log_line 2.2.2.2 "$(date_str today)" "$DB" 200 "$PACMAN" | gzip -c > "$d/access.log.gz"
-head -c -12 "$d/access.log.gz" > "$d/access.log.trunc.gz" &&
-  mv "$d/access.log.trunc.gz" "$d/access.log.gz"
+today=$(date_str today)
+log_line 1.1.1.1 "$today" "$DB" 200 "$PACMAN" > "$d/access.log"
+for i in $(seq 1 3000); do
+  log_line "192.0.2.$((i % 250 + 1))" "$today" "$DB" 200 "$PACMAN"
+done | gzip -c > "$d/access.log.gz"
+size=$(stat -c %s "$d/access.log.gz")
+head -c $((size - size / 8)) "$d/access.log.gz" > "$d/cut.gz" && mv "$d/cut.gz" "$d/access.log.gz"
+yielded=$(gz_lines_before_failure "$d/access.log.gz")
 run "$d" "$tmp/13.json"
 status=$?
-if [ "$status" = 0 ] && [ "$(field "$tmp/13.json" '["unique_90d"]')" = 1 ]; then
-  ok "un .gz truncado se pierde, el resto se cuenta y la corrida sale 0"
+if [ "$yielded" -lt 100 ]; then
+  mal "el fixture no sirve: el .gz truncado soltó $yielded línea(s) antes de fallar y así no distingue nada"
+elif [ "$status" = 0 ] && [ "$(field "$tmp/13.json" '["unique_90d"]')" = 1 ]; then
+  ok "un .gz truncado grande se descarta entero (soltó $yielded líneas), el resto se cuenta y sale 0"
 else
-  mal "el .gz truncado tumbó la corrida (salió con $status) o no se cuentan los demás"
+  mal "el .gz truncado tumbó la corrida (salió con $status) o contó algo de adentro: $(field "$tmp/13.json" '["unique_90d"]')"
 fi
 
 # ── 14. --days pequeño no corta unique_30d ───────────────────────────────────
