@@ -1,0 +1,33 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>VasakOS · repositorio</title>
+<link rel="stylesheet" href="/.autoindex/autoindex.css">
+</head>
+<body>
+<a class="escape" href="#listado">Saltar al listado</a>
+
+<header class="top">
+  <div class="wrap top-in">
+    <a class="brand" href="https://os.vasak.net.ar/">VasakOS</a>
+    <nav class="crumbs" id="crumbs" aria-label="Ruta"></nav>
+  </div>
+</header>
+
+<main class="wrap">
+  <h1 id="heading">Repositorio</h1>
+  <p class="lead">Paquetes de VasakOS para <code>pacman</code>. La lista la arma el servidor a partir de la carpeta; los paquetes se instalan con <code>sudo pacman -S nombre</code> después de agregar el repositorio, que está explicado en <a href="https://os.vasak.net.ar/downloads/">la página de descargas</a>.</p>
+
+  <div class="toolbar">
+    <label class="field">
+      <span class="sr">Filtrar</span>
+      <input id="filter" type="search" placeholder="Filtrar por nombre, versión o descripción" autocomplete="off" spellcheck="false" enterkeyhint="search">
+    </label>
+    <p class="meta" id="meta" aria-live="polite"></p>
+  </div>
+
+  <div id="listado" class="listing">
+    <noscript><p class="empty">El listado se arma con JavaScript; los archivos están en la carpeta igual. Con <code>wget -r</code> en la vista sin estilo de nginx (<a href="?raw=1">enlace directo</a>) o mirando el código de la página también se llega.</p></noscript>
+    <script type="application/json" id="entries">
