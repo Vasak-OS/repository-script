@@ -339,26 +339,47 @@
 
   function start() {
     renderCrumbs();
-    const holder = doc.getElementById('entries-data');
-    let entries;
-    try {
-      entries = JSON.parse(holder ? holder.textContent : '[]');
-    } catch (error) {
-      entries = [];
-    }
 
-    const paintWith = (index) => {
-      const organised = organise(entries, index);
+    // Fetch the directory listing as JSON from the same URL
+    fetch(global.location.href, {
+      headers: { 'Accept': 'application/json' },
+      cache: 'no-cache'
+    })
+    .then(response => response.ok ? response.json() : [])
+    .then(entries => {
+      const paintWith = (index) => {
+        const organised = organise(entries, index);
+        state.folders = organised.folders;
+        state.files = organised.files;
+        paint();
+      };
+
+      paintWith(null);
+      return readIndex(entries);
+    })
+    .then(index => {
+      if (!index) return;
+      const organised = organise(state.folders, index);
       state.folders = organised.folders;
       state.files = organised.files;
       paint();
-    };
-
-    // Sin el json de la carpeta igual se ve todo: sólo falta versión y descripción.
-    paintWith(null);
-    readIndex(Array.isArray(entries) ? entries : []).then((index) => {
+    })
+    .catch(() => {
+      // Fallback: try to read from embedded script tag (for static hosting)
+      const holder = doc.getElementById('entries-data');
+      let entries = [];
+      try {
+        entries = JSON.parse(holder ? holder.textContent : '[]');
+      } catch (error) {}
+      const organised = organise(entries, null);
+      state.folders = organised.folders;
+      state.files = organised.files;
+      paint();
+      return readIndex(entries);
+    })
+    .then(index => {
       if (!index) return;
-      const organised = organise(entries, index);
+      const organised = organise(state.folders, index);
       state.folders = organised.folders;
       state.files = organised.files;
       paint();

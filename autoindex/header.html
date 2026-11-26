@@ -10,41 +10,138 @@
 <body>
 <a class="skip-link" href="#main-content">Saltar al contenido principal</a>
 
-<header class="site-header" role="banner">
-  <div class="header-inner">
-    <a class="brand" href="https://os.vasak.net.ar/" aria-label="VasakOS — Inicio">
-      <svg class="brand-logo" aria-hidden="true" viewBox="0 0 120 30" width="48" height="12">
-        <text x="0" y="22" font-family="VSKRegular, var(--font-title)" font-size="22" font-weight="400" fill="currentColor">VasakOS</text>
-      </svg>
-      <span class="brand-text">
-        <span class="brand-name">VasakOS</span>
-        <span class="brand-subtitle">repositorio oficial</span>
-      </span>
-    </a>
-    <nav class="breadcrumb" id="breadcrumb" aria-label="Ruta de navegación"></nav>
-  </div>
+<header data-header class="header-bar sticky top-0 z-40 m-2 mb-0 rounded-xl border bg-ui-bg/80 backdrop-blur-md" role="banner">
+  <nav class="mx-auto flex h-[var(--header-h)] items-center justify-between px-6 lg:px-8" aria-label="Navegación principal">
+    <div class="flex lg:flex-1">
+      <a href="https://os.vasak.net.ar/" class="-m-1.5" aria-label="VasakOS — Inicio">
+        <span class="sr-only">VasakOS</span>
+        <img class="h-10 w-auto" src="https://os.vasak.net.ar/img/logo.svg" alt="" title="VasakOS" />
+      </a>
+    </div>
+    <div class="hidden lg:flex lg:gap-x-8">
+      <a href="https://os.vasak.net.ar/" class="text-[15px] font-medium leading-6 text-tx-main hover:text-brand-text">Inicio</a>
+      <a href="https://os.vasak.net.ar/downloads/" class="text-[15px] font-medium leading-6 text-tx-main hover:text-brand-text">Descargas</a>
+      <a href="https://os.vasak.net.ar/state/" class="text-[15px] font-medium leading-6 text-tx-main hover:text-brand-text">Estado</a>
+      <a href="https://os.vasak.net.ar/changelogs/" class="text-[15px] font-medium leading-6 text-tx-main hover:text-brand-text">Cambios</a>
+    </div>
+    <div class="hidden lg:flex lg:flex-1 lg:items-center lg:justify-end lg:gap-3">
+      <a href="https://os.vasak.net.ar/es/" class="text-sm text-tx-main hover:text-brand-text" hreflang="es">ES</a>
+      <a href="https://os.vasak.net.ar/en/" class="text-sm text-tx-main hover:text-brand-text" hreflang="en">EN</a>
+      <button type="button" class="btn btn-icon btn-md btn-neutral text-tx-main hover:text-brand-text" aria-label="Alternar modo oscuro" onclick="toggleDarkMode()">
+        <span class="icon icon-sun" aria-hidden="true"></span>
+        <span class="icon icon-moon" aria-hidden="true"></span>
+      </button>
+    </div>
+  </nav>
 </header>
 
+<script>
+(function () {
+  var barra = document.querySelector("[data-header]");
+  if (!barra) return;
+  var pendiente = false;
+  function madurar() {
+    barra.classList.toggle("is-scrolled", window.scrollY > 8);
+    pendiente = false;
+  }
+  madurar();
+  addEventListener("scroll", function () {
+    if (pendiente) return;
+    pendiente = true;
+    requestAnimationFrame(madurar);
+  }, { passive: true });
+})();
+
+function toggleDarkMode() {
+  var html = document.documentElement;
+  var isDark = html.classList.toggle("dark");
+  localStorage.setItem("theme", isDark ? "dark" : "light");
+}
+
+(function () {
+  var saved = localStorage.getItem("theme");
+  var prefersDark = window.matchMedia("(prefers-color-scheme: dark)").matches;
+  var isDark = saved ? saved === "dark" : prefersDark;
+  if (isDark) document.documentElement.classList.add("dark");
+})();
+</script>
+
 <main id="main-content" class="main-content" role="main">
-  <div class="page-header">
-    <h1 class="page-title" id="page-title">Repositorio</h1>
-    <p class="page-lead">Paquetes de VasakOS para <code>pacman</code>. Agrega el repositorio siguiendo <a href="https://os.vasak.net.ar/downloads/">la guía de descargas</a> y luego instala con <code>sudo pacman -S <paquete></code>.</p>
-  </div>
-
-  <div class="toolbar" role="search" aria-label="Filtrar paquetes">
-    <label class="search-field" for="filter-input">
-      <span class="sr-only">Filtrar por nombre, versión, descripción o arquitectura</span>
-      <span class="search-icon" aria-hidden="true"><i class="icon icon-search"></i></span>
-      <input id="filter-input" type="search" placeholder="Filtrar paquetes…" autocomplete="off" spellcheck="false" enterkeyhint="search">
-      <button type="button" class="clear-btn" aria-label="Limpiar filtro" hidden><i class="icon icon-xmark"></i></button>
-    </label>
-    <div class="toolbar-meta" id="toolbar-meta" aria-live="polite"></div>
-  </div>
-
-  <section id="listing" class="listing" aria-label="Contenido de la carpeta">
-    <noscript>
-      <div class="noscript-notice">
-        <p>El listado interactivo requiere JavaScript. Los archivos están disponibles inspeccionando el código de la página (el JSON con la lista está en el bloque <code><script type="application/json"></code>).</p>
+  <div class="page-header mx-2 mt-3">
+    <div class="panel mx-auto w-full max-w-6xl rounded-xl px-6 py-8 md:px-10">
+      <div class="flex flex-col items-center text-center">
+        <h1 class="page-title text-2xl md:text-3xl font-bold text-brand-text mb-2">Repositorio</h1>
+        <p class="page-lead text-tx-muted max-w-2xl">
+          Paquetes de VasakOS para <code>pacman</code>. Agrega el repositorio siguiendo
+          <a href="https://os.vasak.net.ar/downloads/" class="link-row px-3 py-1 text-sm text-tx-muted hover:text-tx-main">la guía de descargas</a>
+          y luego instala con <code>sudo pacman -S <paquete></code>.
+        </p>
       </div>
-    </noscript>
-    <script type="application/json" id="entries-data">
+    </div>
+  </div>
+
+  <div class="toolbar mx-2 mt-3" role="search" aria-label="Filtrar paquetes">
+    <div class="panel mx-auto w-full max-w-6xl rounded-xl px-6 py-4 md:px-10">
+      <div class="flex flex-wrap items-center justify-between gap-3 lg:gap-4">
+        <div class="search-field flex-1 min-w-[20rem] max-w-[32rem]">
+          <label class="sr-only" for="filter-input">Filtrar por nombre, versión, descripción o arquitectura</label>
+          <span class="search-icon" aria-hidden="true"><i class="icon icon-search"></i></span>
+          <input id="filter-input" type="search" placeholder="Filtrar paquetes…" autocomplete="off" spellcheck="false" enterkeyhint="search">
+          <button type="button" class="clear-btn" aria-label="Limpiar filtro" hidden><i class="icon icon-xmark"></i></button>
+        </label>
+        </div>
+        <div class="toolbar-meta" id="toolbar-meta" aria-live="polite"></div>
+      </div>
+    </div>
+  </div>
+
+  <section id="listing" class="mx-2 mt-3" aria-label="Contenido de la carpeta">
+    <div class="panel mx-auto w-full max-w-6xl rounded-xl md:px-10">
+      <noscript>
+        <div class="noscript-notice p-6 text-center">
+          <i class="icon icon-triangle-exclamation empty-mark mx-auto mb-4" aria-hidden="true"></i>
+          <p class="text-tx-muted mb-2">El listado interactivo requiere JavaScript.</p>
+          <p class="text-sm text-tx-muted">Los archivos están disponibles inspeccionando el código de la página (el JSON con la lista está en el bloque <code><script type="application/json"></code>).</p>
+        </div>
+      </noscript>
+      <!-- JSON data loaded dynamically via fetch -->
+    </div>
+  </section>
+</main>
+
+<footer class="mx-2 mt-3 mb-2" role="contentinfo">
+  <div class="panel mx-auto w-full max-w-6xl rounded-xl px-6 py-10 md:px-10">
+    <div class="flex flex-col items-center">
+      <span class="mb-6">
+        <img src="https://os.vasak.net.ar/img/logo.svg" alt="VasakOS" loading="lazy" class="h-16" />
+      </span>
+      <nav aria-label="Enlaces del pie" class="flex flex-wrap items-center justify-center gap-2 lg:gap-3 gap-y-2 lg:flex-nowrap mb-8">
+        <a href="https://vasak.net.ar/" rel="noopener" target="_blank" class="link-row px-3 py-2 text-sm text-tx-muted hover:text-tx-main">Vasak Group</a>
+        <a href="https://os.vasak.net.ar/privacy/" class="link-row px-3 py-2 text-sm text-tx-muted hover:text-tx-main">Privacidad</a>
+        <a href="https://os.vasak.net.ar/terms/" class="link-row px-3 py-2 text-sm text-tx-muted hover:text-tx-main">Términos</a>
+        <a href="https://os.vasak.net.ar/changelogs/" class="link-row px-3 py-2 text-sm text-tx-muted hover:text-tx-main">Cambios</a>
+        <a href="https://os.vasak.net.ar/index.xml" class="link-row px-3 py-2 text-sm text-tx-muted hover:text-tx-main">RSS</a>
+      </nav>
+      <div class="mt-8 flex items-center gap-3">
+        <a href="https://github.com/Vasak-OS" aria-label="GitHub" title="GitHub" target="_blank" rel="noopener" class="btn btn-icon btn-md btn-neutral text-tx-muted hover:text-brand-text"><i class="icon icon-github" aria-hidden="true"></i></a>
+        <a href="https://matrix.to/#/#vasak:matrix.org" aria-label="Matrix" title="Matrix" target="_blank" rel="noopener" class="btn btn-icon btn-md btn-neutral text-tx-muted hover:text-brand-text"><i class="icon icon-hash" aria-hidden="true"></i></a>
+        <a href="https://www.reddit.com/r/VasakOS/" aria-label="Reddit" title="Reddit" target="_blank" rel="noopener" class="btn btn-icon btn-md btn-neutral text-tx-muted hover:text-brand-text"><i class="icon icon-reddit" aria-hidden="true"></i></a>
+      </div>
+      <div class="mt-8 w-full">
+        <hr class="rule mx-auto mb-6 w-20" />
+        <p class="text-base text-tx-muted py-1"><a href="https://os.vasak.net.ar/" class="text-brand-text font-bold" rel="nofollow" aria-current="page">Vasak Group</a> © 2024 — Todos los derechos reservados.</p>
+        <p class="text-sm text-tx-muted py-1">
+          Iconos: <a href="https://fontawesome.com/free" rel="noopener nofollow" target="_blank" class="text-tx-main underline decoration-tx-muted underline-offset-2">Font Awesome Free</a> (modificados, <a href="https://creativecommons.org/licenses/by/4.0/" rel="license noopener nofollow" target="_blank" class="text-tx-main underline decoration-tx-muted underline-offset-2">CC BY 4.0</a>)
+        </p>
+      </div>
+    </div>
+  </div>
+</footer>
+
+<a rel="noopener" href="#" aria-label="Volver arriba" class="btn btn-icon btn-lg btn-primary sheen fixed bottom-4 right-4 z-30 text-xl md:bottom-6 md:right-6" onclick="event.preventDefault(); window.scrollTo({top:0,behavior:'smooth'})">
+  <i class="icon icon-chevron-up" aria-hidden="true"></i>
+</a>
+
+<script src="/.autoindex/autoindex.js"></script>
+</body>
+</html>
