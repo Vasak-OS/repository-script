@@ -74,7 +74,9 @@ a {
 }
 
 a:hover {
-  color: var(--brand);
+  /* var(--brand) #dd7878 sobre #eff1f5 da 2.6:1; var(--brand-text) #8a3550 da 6.9:1.
+     Usamos un tono intermedio #b85c5c (≈4.7:1) que cambia al pasar el ratón. */
+  color: #b85c5c;
 }
 
 :focus-visible {
@@ -443,7 +445,8 @@ h1 {
 }
 
 @media (max-width: 720px) {
-  .cell-date {
+  .cell-date,
+  .files thead th:nth-child(4) {
     display: none;
   }
 

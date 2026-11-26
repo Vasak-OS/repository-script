@@ -36,7 +36,9 @@
       unit += 1;
     } while (value >= 1024 && unit < units.length - 1);
     const digits = value < 10 ? 1 : 0;
-    return value.toFixed(digits).replace(/\.?0+$/, '') + ' ' + units[unit];
+    // Solo quita ceros finales si hay parte fraccionaria: 102400 → "100 kB", 1536 → "1.5 kB"
+    const fixed = value.toFixed(digits);
+    return (fixed.includes('.') ? fixed.replace(/\.?0+$/, '') : fixed) + ' ' + units[unit];
   }
 
   function formatDate(value) {

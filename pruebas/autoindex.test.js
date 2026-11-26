@@ -21,7 +21,8 @@ describe("autoindex: formatBytes", () => {
 
 describe("autoindex: formatDate", () => {
   test("fecha válida ISO", () => {
-    const d = api.formatDate("2026-11-26T15:00:00Z");
+    // Mediodía local evita cambio de día por zona horaria
+    const d = api.formatDate(new Date(2026, 10, 26, 12).toISOString());
     expect(d.includes("26 nov 2026") || d.includes("26 Nov 2026")).toBe(true);
   });
   test("fecha inválida", () => expect(api.formatDate("no")).toBe("—"));
